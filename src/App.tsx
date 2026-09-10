@@ -22,13 +22,17 @@ import { TradeModal } from './components/TradeModal';
 import { CopyModal } from './components/CopyModal';
 import { AuthModal } from './components/AuthModal';
 import { AiChatDrawer } from './components/AiChatDrawer';
+import { UserDashboardModal } from './components/UserDashboardModal';
+import { AdminPortalModal } from './components/AdminPortalModal';
 
 import { Instrument, PopularInvestor } from './types';
 import { INSTRUMENTS } from './data/mockData';
-import { MessageSquare, ArrowUp, ArrowRight } from 'lucide-react';
+import { MessageSquare, ArrowUp, ArrowRight, ShieldCheck, Users } from 'lucide-react';
 
 export default function App() {
   const [isSearchOpen, setIsSearchOpen] = useState(false);
+  const [isUserDashboardOpen, setIsUserDashboardOpen] = useState(false);
+  const [isAdminPortalOpen, setIsAdminPortalOpen] = useState(false);
   const [tradeInstrument, setTradeInstrument] = useState<Instrument | null>(null);
   const [copyInvestor, setCopyInvestor] = useState<PopularInvestor | null>(null);
   const [authModal, setAuthModal] = useState<{ isOpen: boolean; mode: 'login' | 'signup' }>({
@@ -77,14 +81,41 @@ export default function App() {
       <Header
         onOpenSearch={() => setIsSearchOpen(true)}
         onOpenAuth={(mode) => setAuthModal({ isOpen: true, mode })}
+        onOpenUserDashboard={() => setIsUserDashboardOpen(true)}
+        onOpenAdminPortal={() => setIsAdminPortalOpen(true)}
+        currentUser={currentUser}
       />
 
-      {/* User Welcome bar if logged in */}
-      {currentUser && (
-        <div className="bg-[#1b2214] border-b border-[#6dff8a]/30 px-4 py-2 text-xs text-center text-[#d4d6cf]">
-          Connected as <strong className="text-[#6dff8a]">{currentUser.name}</strong> • Demo Balance: <strong className="text-white">$100,000.00 USD</strong>
+      {/* Quick Environment Bar for testing Admin and User Functions */}
+      <div className="bg-[#12140c] border-b border-white/10 px-4 py-2 text-xs flex flex-wrap items-center justify-between gap-2">
+        <div className="flex items-center gap-2 text-white/70">
+          <span className="w-2 h-2 rounded-full bg-[#6dff8a] animate-pulse" />
+          <span>TradeShark Ltd Portal Access:</span>
+          {currentUser ? (
+            <span className="text-white font-semibold">Active User: {currentUser.name}</span>
+          ) : (
+            <span className="text-white/50">Simulated Environment</span>
+          )}
         </div>
-      )}
+
+        <div className="flex items-center gap-2">
+          <button
+            onClick={() => setIsUserDashboardOpen(true)}
+            className="flex items-center gap-1.5 px-3 py-1 rounded-lg bg-white/5 hover:bg-[#6dff8a]/20 text-white hover:text-[#6dff8a] border border-white/10 text-xs font-semibold transition-colors"
+          >
+            <Users className="w-3.5 h-3.5 text-[#6dff8a]" />
+            <span>Open User Portal</span>
+          </button>
+
+          <button
+            onClick={() => setIsAdminPortalOpen(true)}
+            className="flex items-center gap-1.5 px-3 py-1 rounded-lg bg-white/5 hover:bg-yellow-400/20 text-white hover:text-yellow-400 border border-white/10 text-xs font-semibold transition-colors"
+          >
+            <ShieldCheck className="w-3.5 h-3.5 text-yellow-400" />
+            <span>Open Admin Console</span>
+          </button>
+        </div>
+      </div>
 
       {/* Main Page Sections */}
       <main className="flex-1">
@@ -132,7 +163,10 @@ export default function App() {
       </main>
 
       {/* Footer */}
-      <Footer />
+      <Footer 
+        onOpenUserDashboard={() => setIsUserDashboardOpen(true)}
+        onOpenAdminPortal={() => setIsAdminPortalOpen(true)}
+      />
 
       {/* Floating AI Assistant Trigger Button */}
       <div className="fixed bottom-6 right-6 z-40 flex flex-col gap-3">
@@ -200,6 +234,20 @@ export default function App() {
         isOpen={isAiChatOpen}
         onClose={() => setIsAiChatOpen(false)}
         onOpenTrade={handleOpenTradeForSymbol}
+      />
+
+      {/* User Dashboard & Client Portal */}
+      <UserDashboardModal
+        isOpen={isUserDashboardOpen}
+        onClose={() => setIsUserDashboardOpen(false)}
+        user={currentUser}
+        onOpenTrade={handleOpenTradeForSymbol}
+      />
+
+      {/* Administrative Console */}
+      <AdminPortalModal
+        isOpen={isAdminPortalOpen}
+        onClose={() => setIsAdminPortalOpen(false)}
       />
 
     </div>

@@ -18,14 +18,24 @@ import { TradeSharkLogo } from './TradeSharkLogo';
 interface HeaderProps {
   onOpenSearch: () => void;
   onOpenAuth: (mode: 'login' | 'signup') => void;
+  onOpenUserDashboard: () => void;
+  onOpenAdminPortal: () => void;
+  currentUser?: { name: string; email: string } | null;
 }
 
-export const Header: React.FC<HeaderProps> = ({ onOpenSearch, onOpenAuth }) => {
+export const Header: React.FC<HeaderProps> = ({ 
+  onOpenSearch, 
+  onOpenAuth,
+  onOpenUserDashboard,
+  onOpenAdminPortal,
+  currentUser
+}) => {
   const [isScrolled, setIsScrolled] = useState(false);
   const [activeDropdown, setActiveDropdown] = useState<string | null>(null);
   const [mobileMenuOpen, setMobileMenuOpen] = useState(false);
   const [selectedLang, setSelectedLang] = useState('EN');
   const [langMenuOpen, setLangMenuOpen] = useState(false);
+  const [portalsMenuOpen, setPortalsMenuOpen] = useState(false);
 
   useEffect(() => {
     const handleScroll = () => {
@@ -228,20 +238,109 @@ export const Header: React.FC<HeaderProps> = ({ onOpenSearch, onOpenAuth }) => {
                 </div>
               )}
             </div>
+
+            {/* 5. Portals (User & Admin Functions) */}
+            <div 
+              className="relative"
+              onMouseEnter={() => setActiveDropdown('portals')}
+              onMouseLeave={() => setActiveDropdown(null)}
+            >
+              <button 
+                id="header-portals-dropdown"
+                className="flex items-center gap-1.5 px-3 py-1.5 text-xs font-bold text-white bg-white/5 hover:bg-white/10 border border-white/15 rounded-full transition-colors"
+              >
+                <span className="w-2 h-2 rounded-full bg-[#6dff8a] animate-pulse" />
+                <span>Portals</span>
+                <ChevronDown className={`w-3.5 h-3.5 transition-transform duration-200 ${activeDropdown === 'portals' ? 'rotate-180 text-[#6dff8a]' : ''}`} />
+              </button>
+
+              {activeDropdown === 'portals' && (
+                <div className="absolute left-0 top-full pt-2 w-[320px] animate-fadeIn">
+                  <div className="bg-[#191d12] border border-[#6dff8a]/30 rounded-2xl p-4 shadow-2xl backdrop-blur-xl space-y-2">
+                    <div className="text-[10px] font-bold uppercase tracking-wider text-white/40 px-2">
+                      Access Environments
+                    </div>
+
+                    {/* User Dashboard Link */}
+                    <button
+                      onClick={() => {
+                        setActiveDropdown(null);
+                        onOpenUserDashboard();
+                      }}
+                      className="w-full text-left p-3 rounded-xl hover:bg-white/5 border border-transparent hover:border-white/10 flex items-start gap-3 transition-colors group"
+                    >
+                      <div className="w-8 h-8 rounded-lg bg-[#6dff8a]/20 text-[#6dff8a] flex items-center justify-center shrink-0 mt-0.5">
+                        <Users className="w-4 h-4" />
+                      </div>
+                      <div>
+                        <div className="text-xs font-bold text-white group-hover:text-[#6dff8a] flex items-center gap-1.5">
+                          <span>User Dashboard</span>
+                          <span className="text-[9px] bg-[#6dff8a]/20 text-[#6dff8a] px-1.5 rounded">CLIENT</span>
+                        </div>
+                        <p className="text-[11px] text-[#a3a89e]">Portfolio, open positions, deposits &amp; copy trades</p>
+                      </div>
+                    </button>
+
+                    {/* Admin Console Link */}
+                    <button
+                      onClick={() => {
+                        setActiveDropdown(null);
+                        onOpenAdminPortal();
+                      }}
+                      className="w-full text-left p-3 rounded-xl hover:bg-white/5 border border-transparent hover:border-[#6dff8a]/30 flex items-start gap-3 transition-colors group"
+                    >
+                      <div className="w-8 h-8 rounded-lg bg-red-500/20 text-red-400 flex items-center justify-center shrink-0 mt-0.5">
+                        <ShieldCheck className="w-4 h-4" />
+                      </div>
+                      <div>
+                        <div className="text-xs font-bold text-white group-hover:text-red-400 flex items-center gap-1.5">
+                          <span>Admin Console</span>
+                          <span className="text-[9px] bg-red-500/20 text-red-400 px-1.5 rounded font-mono">SUPER ADMIN</span>
+                        </div>
+                        <p className="text-[11px] text-[#a3a89e]">Market halters, spreads, KYC verification &amp; audit logs</p>
+                      </div>
+                    </button>
+                  </div>
+                </div>
+              )}
+            </div>
           </nav>
         </div>
 
         {/* Right Side Controls */}
-        <div className="flex items-center gap-3 sm:gap-4">
+        <div className="flex items-center gap-2 sm:gap-3">
+          {/* Direct User Portal Quick Button */}
+          <button
+            id="header-user-portal-btn"
+            onClick={onOpenUserDashboard}
+            className="hidden xl:inline-flex items-center gap-1.5 px-3 py-1.5 text-xs font-semibold text-white/90 hover:text-white bg-white/5 hover:bg-white/10 rounded-full border border-white/10 transition-colors"
+            title="Open User Dashboard"
+          >
+            <Users className="w-3.5 h-3.5 text-[#6dff8a]" />
+            <span>User Portal</span>
+          </button>
+
+          {/* Direct Admin Console Quick Button */}
+          <button
+            id="header-admin-portal-btn"
+            onClick={onOpenAdminPortal}
+            className="hidden lg:inline-flex items-center gap-1.5 px-3 py-1.5 text-xs font-semibold text-white/90 hover:text-white bg-white/5 hover:bg-white/10 rounded-full border border-white/10 transition-colors"
+            title="Open Admin Console"
+          >
+            <ShieldCheck className="w-3.5 h-3.5 text-yellow-400" />
+            <span>Admin</span>
+            <span className="text-[9px] bg-yellow-400/20 text-yellow-400 px-1 rounded font-mono">Console</span>
+          </button>
+
           {/* Quick Search Button */}
           <button 
             id="header-search-btn"
             onClick={onOpenSearch}
-            className="flex items-center gap-2 p-2.5 sm:px-3.5 sm:py-2 text-sm text-[#c8ccc2] hover:text-white bg-white/5 hover:bg-white/10 rounded-full border border-white/10 transition-colors"
+            className="flex items-center gap-2 p-2 sm:px-3 sm:py-2 text-sm text-[#c8ccc2] hover:text-white bg-white/5 hover:bg-white/10 rounded-full border border-white/10 transition-colors"
             title="Search instruments (Cmd+K)"
           >
             <Search className="w-4 h-4 text-[#6dff8a]" />
-            <span className="hidden lg:inline text-xs text-white/60">Search markets...</span>
+            <span className="hidden 2xl:inline text-xs text-white/60">Search markets...</span>
             <kbd className="hidden lg:inline text-[10px] bg-white/10 text-white/70 px-1.5 py-0.5 rounded border border-white/10 font-mono">⌘K</kbd>
           </button>
 
@@ -279,20 +378,32 @@ export const Header: React.FC<HeaderProps> = ({ onOpenSearch, onOpenAuth }) => {
 
           <div className="h-5 w-px bg-white/15 hidden sm:block"></div>
 
-          {/* Log In Button */}
-          <button 
-            id="header-login-btn"
-            onClick={() => onOpenAuth('login')}
-            className="hidden sm:inline-flex items-center px-4 py-2 text-sm font-semibold text-white hover:text-[#6dff8a] bg-transparent border border-white/20 hover:border-[#6dff8a]/50 rounded-full transition-all"
-          >
-            Log in
-          </button>
+          {/* Log In Button / User Avatar Button */}
+          {currentUser ? (
+            <button
+              onClick={onOpenUserDashboard}
+              className="flex items-center gap-2 px-3 py-1.5 rounded-full bg-white/10 hover:bg-white/15 border border-[#6dff8a]/40 text-xs font-semibold text-white transition-colors"
+            >
+              <span className="w-6 h-6 rounded-full bg-[#6dff8a] text-[#15170f] font-bold flex items-center justify-center text-[10px]">
+                {currentUser.name.slice(0, 1).toUpperCase()}
+              </span>
+              <span className="hidden sm:inline">{currentUser.name}</span>
+            </button>
+          ) : (
+            <button 
+              id="header-login-btn"
+              onClick={() => onOpenAuth('login')}
+              className="hidden sm:inline-flex items-center px-4 py-2 text-sm font-semibold text-white hover:text-[#6dff8a] bg-transparent border border-white/20 hover:border-[#6dff8a]/50 rounded-full transition-all"
+            >
+              Log in
+            </button>
+          )}
 
           {/* Start Investing Primary CTA */}
           <button 
             id="header-signup-btn"
             onClick={() => onOpenAuth('signup')}
-            className="inline-flex items-center gap-2 px-5 py-2.5 text-sm font-bold text-[#15170f] bg-[#6dff8a] hover:bg-[#5ce077] rounded-full shadow-[0_0_20px_rgba(109,255,138,0.25)] transition-all transform hover:scale-[1.02] active:scale-[0.98]"
+            className="inline-flex items-center gap-2 px-4 sm:px-5 py-2.5 text-xs sm:text-sm font-bold text-[#15170f] bg-[#6dff8a] hover:bg-[#5ce077] rounded-full shadow-[0_0_20px_rgba(109,255,138,0.25)] transition-all transform hover:scale-[1.02] active:scale-[0.98]"
           >
             <span>Start Investing</span>
             <ArrowRight className="w-4 h-4 hidden sm:inline" />
@@ -313,6 +424,37 @@ export const Header: React.FC<HeaderProps> = ({ onOpenSearch, onOpenAuth }) => {
       {/* Mobile Drawer Menu */}
       {mobileMenuOpen && (
         <div className="md:hidden bg-[#15170f] border-b border-white/10 px-6 py-6 space-y-6 animate-fadeIn max-h-[80vh] overflow-y-auto">
+          {/* Quick Portal Launchers for Mobile */}
+          <div className="p-3.5 rounded-2xl bg-[#1b1f13] border border-white/15 space-y-2.5">
+            <span className="text-[11px] font-bold text-[#6dff8a] uppercase tracking-wider block">
+              Access Portals
+            </span>
+            <div className="grid grid-cols-2 gap-2">
+              <button
+                onClick={() => {
+                  setMobileMenuOpen(false);
+                  onOpenUserDashboard();
+                }}
+                className="p-3 rounded-xl bg-white/5 border border-white/10 hover:border-[#6dff8a] flex flex-col items-start gap-1 text-left"
+              >
+                <Users className="w-4 h-4 text-[#6dff8a]" />
+                <span className="text-xs font-bold text-white">User Portal</span>
+                <span className="text-[10px] text-white/50">Dashboard &amp; Trades</span>
+              </button>
+              <button
+                onClick={() => {
+                  setMobileMenuOpen(false);
+                  onOpenAdminPortal();
+                }}
+                className="p-3 rounded-xl bg-white/5 border border-white/10 hover:border-yellow-400 flex flex-col items-start gap-1 text-left"
+              >
+                <ShieldCheck className="w-4 h-4 text-yellow-400" />
+                <span className="text-xs font-bold text-white">Admin Console</span>
+                <span className="text-[10px] text-white/50">KYC &amp; Markets</span>
+              </button>
+            </div>
+          </div>
+
           <div className="space-y-4">
             <div className="font-semibold text-[#6dff8a] text-xs uppercase tracking-wider">Markets &amp; Trading</div>
             <div className="grid grid-cols-2 gap-2 text-sm text-white/80">
