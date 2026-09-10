@@ -10,26 +10,104 @@ import {
   FileText, 
   RefreshCw, 
   Search, 
-  Lock,
-  ArrowUpRight,
-  Database,
-  BarChart3,
-  Edit2
+  Lock, 
+  Unlock,
+  ArrowUpRight, 
+  ArrowDownLeft,
+  Database, 
+  BarChart3, 
+  Edit2, 
+  DollarSign, 
+  UserPlus, 
+  PlusCircle, 
+  Check, 
+  Filter, 
+  AlertCircle,
+  Eye,
+  SlidersHorizontal,
+  ChevronRight,
+  TrendingUp,
+  CreditCard,
+  Building,
+  Key
 } from 'lucide-react';
 import { TradeSharkLogo } from './TradeSharkLogo';
+import { useBrokerage } from '../context/BrokerageContext';
+import { UserAccount, UserTier, AccountStatus, FundingTransaction } from '../types';
 
 interface AdminPortalModalProps {
   isOpen: boolean;
   onClose: () => void;
+  onSwitchToUserDashboard?: () => void;
 }
 
-export const AdminPortalModal: React.FC<AdminPortalModalProps> = ({ isOpen, onClose }) => {
+export const AdminPortalModal: React.FC<AdminPortalModalProps> = ({ 
+  isOpen, 
+  onClose,
+  onSwitchToUserDashboard
+}) => {
   if (!isOpen) return null;
 
-  const [activeTab, setActiveTab] = useState<'overview' | 'markets' | 'users' | 'pro' | 'compliance'>('overview');
-  const [notification, setNotification] = useState<string | null>(null);
+  const {
+    users,
+    currentUser,
+    setCurrentUserId,
+    transactions,
+    auditLogs,
+    createUser,
+    updateUser,
+    setUserStatus,
+    toggleTradingPermission,
+    updateUserTier,
+    updateUserLeverage,
+    approveKyc,
+    rejectKyc,
+    requestKycResubmit,
+    updateAmlRisk,
+    approveFunding,
+    rejectFunding,
+    manualBalanceAdjustment
+  } = useBrokerage();
 
-  // Mock Admin Markets State
+  const [activeTab, setActiveTab] = useState<'users' | 'setup' | 'kyc' | 'funding' | 'markets' | 'audit'>('users');
+  const [notification, setNotification] = useState<string | null>(null);
+  const [searchTerm, setSearchTerm] = useState('');
+  const [statusFilter, setStatusFilter] = useState<'ALL' | AccountStatus>('ALL');
+
+  // Selected User for Deep Account Control
+  const [inspectingUser, setInspectingUser] = useState<UserAccount | null>(null);
+
+  // Manual Balance Adjustment Modal
+  const [balanceModalUser, setBalanceModalUser] = useState<UserAccount | null>(null);
+  const [adjustAmount, setAdjustAmount] = useState('1000');
+  const [adjustType, setAdjustType] = useState<'Admin Credit' | 'Admin Debit' | 'Bonus'>('Admin Credit');
+  const [adjustNote, setAdjustNote] = useState('Administrative balance adjustment authorized by treasury');
+
+  // KYC Rejection / Resubmit Modal
+  const [kycActionModal, setKycActionModal] = useState<{
+    user: UserAccount;
+    mode: 'reject' | 'resubmit';
+  } | null>(null);
+  const [kycReason, setKycReason] = useState('Document expired or unreadable text');
+
+  // New User Setup Form State
+  const [newUserName, setNewUserName] = useState('');
+  const [newUserEmail, setNewUserEmail] = useState('');
+  const [newUserPhone, setNewUserPhone] = useState('+44 ');
+  const [newUserCountry, setNewUserCountry] = useState('United Kingdom');
+  const [newUserTier, setNewUserTier] = useState<UserTier>('Tier 2 - Verified Pro');
+  const [newUserCurrency, setNewUserCurrency] = useState<'USD' | 'EUR' | 'GBP'>('USD');
+  const [newUserBalance, setNewUserBalance] = useState('25000');
+  const [newUserLeverage, setNewUserLeverage] = useState('100');
+  const [newUserDocType, setNewUserDocType] = useState<UserAccount['kycDocType']>('Passport');
+  const [newUserDocNum, setNewUserDocNum] = useState('GB-7718290');
+  const [newUserAutoVerify, setNewUserAutoVerify] = useState(true);
+  const [newUserAllowTrading, setNewUserAllowTrading] = useState(true);
+  const [newUserAllowShorting, setNewUserAllowShorting] = useState(true);
+  const [newUserAllowCrypto, setNewUserAllowCrypto] = useState(true);
+  const [newUserAccountManager, setNewUserAccountManager] = useState('David Sterling');
+
+  // Mock Market Assets State
   const [marketAssets, setMarketAssets] = useState([
     { symbol: 'NVDA', name: 'NVIDIA Corp', category: 'Stocks', price: 218.15, spread: '0.02%', status: 'Active', halted: false },
     { symbol: 'BTC', name: 'Bitcoin', category: 'Crypto', price: 91420.00, spread: '0.30%', status: 'Active', halted: false },
@@ -39,23 +117,9 @@ export const AdminPortalModal: React.FC<AdminPortalModalProps> = ({ isOpen, onCl
     { symbol: 'EUR/USD', name: 'Euro / US Dollar', category: 'Currencies', price: 1.0842, spread: '0.01%', status: 'Active', halted: false },
   ]);
 
-  // Mock Admin Users State
-  const [usersList, setUsersList] = useState([
-    { id: 'USR-891', name: 'Alex Mercer', email: 'alex.m@gmail.com', balance: '$104,850.25', kycStatus: 'Approved', role: 'Trader', active: true },
-    { id: 'USR-892', name: 'Sarah Jenkins', email: 'sjenkins@techcorp.io', balance: '$42,300.00', kycStatus: 'Approved', role: 'Pro Investor', active: true },
-    { id: 'USR-893', name: 'Liam Chen', email: 'liam.chen@outlook.com', balance: '$15,820.00', kycStatus: 'Pending', role: 'Trader', active: true },
-    { id: 'USR-894', name: 'Elena Rostov', email: 'e.rostov@proton.me', balance: '$8,450.00', kycStatus: 'Under Review', role: 'Trader', active: false },
-  ]);
-
-  // Mock CopyTrader Pro candidates
-  const [proCandidates, setProCandidates] = useState([
-    { id: 'pro-1', name: 'Marcus Vance', return24M: '+78.4%', riskScore: 4, copiersRequest: 410, status: 'Pending Review' },
-    { id: 'pro-2', name: 'Klara Lindqvist', return24M: '+52.1%', riskScore: 3, copiersRequest: 890, status: 'Approved' }
-  ]);
-
   const showToast = (msg: string) => {
     setNotification(msg);
-    setTimeout(() => setNotification(null), 3000);
+    setTimeout(() => setNotification(null), 3500);
   };
 
   const toggleHalt = (symbol: string) => {
@@ -69,36 +133,92 @@ export const AdminPortalModal: React.FC<AdminPortalModalProps> = ({ isOpen, onCl
     }));
   };
 
-  const toggleUserStatus = (id: string) => {
-    setUsersList(prev => prev.map(u => {
-      if (u.id === id) {
-        const nextActive = !u.active;
-        showToast(`User ${u.name} status updated to ${nextActive ? 'Active' : 'Suspended'}`);
-        return { ...u, active: nextActive };
-      }
-      return u;
-    }));
+  // Pending counts
+  const pendingKycCount = users.filter(u => u.kycStatus === 'Pending' || u.kycStatus === 'Under Review').length;
+  const pendingFundingCount = transactions.filter(t => t.status === 'Pending Approval').length;
+
+  // Handle New User Creation
+  const handleCreateUserSubmit = (e: React.FormEvent) => {
+    e.preventDefault();
+    if (!newUserName || !newUserEmail) return;
+
+    const created = createUser({
+      name: newUserName,
+      email: newUserEmail,
+      phone: newUserPhone,
+      country: newUserCountry,
+      tier: newUserTier,
+      currency: newUserCurrency,
+      realBalance: parseFloat(newUserBalance) || 0,
+      virtualBalance: 100000,
+      kycStatus: newUserAutoVerify ? 'Approved' : 'Pending',
+      kycDocType: newUserDocType,
+      kycDocNumber: newUserDocNum || 'DOC-AUTO-GEN',
+      kycSubmittedDate: new Date().toISOString().replace('T', ' ').substring(0, 16),
+      amlRisk: 'Low',
+      pepWatchlistHit: false,
+      status: 'Active',
+      role: newUserTier.includes('VIP') ? 'VIP Client' : 'Trader',
+      leverage: parseInt(newUserLeverage, 10) || 100,
+      allowTrading: newUserAllowTrading,
+      allowShorting: newUserAllowShorting,
+      allowCrypto: newUserAllowCrypto,
+      maxPositionLimit: newUserTier.includes('VIP') ? 1000000 : 250000,
+      accountManager: newUserAccountManager
+    });
+
+    showToast(`Account successfully provisioned for ${created.name} (${created.id})`);
+    // Reset form
+    setNewUserName('');
+    setNewUserEmail('');
+    setNewUserBalance('25000');
+    setActiveTab('users');
   };
 
-  const approveKyc = (id: string) => {
-    setUsersList(prev => prev.map(u => {
-      if (u.id === id) {
-        showToast(`KYC Approved for ${u.name}`);
-        return { ...u, kycStatus: 'Approved' };
-      }
-      return u;
-    }));
+  // Handle Manual Balance Adjustment
+  const handleExecuteBalanceAdjustment = (e: React.FormEvent) => {
+    e.preventDefault();
+    if (!balanceModalUser) return;
+    const amt = parseFloat(adjustAmount);
+    if (isNaN(amt) || amt <= 0) return;
+
+    manualBalanceAdjustment(balanceModalUser.id, amt, adjustType, adjustNote);
+    showToast(`Successfully executed ${adjustType} of $${amt.toLocaleString()} for ${balanceModalUser.name}`);
+    setBalanceModalUser(null);
   };
+
+  // Handle KYC Action submit
+  const handleExecuteKycAction = (e: React.FormEvent) => {
+    e.preventDefault();
+    if (!kycActionModal) return;
+
+    if (kycActionModal.mode === 'reject') {
+      rejectKyc(kycActionModal.user.id, kycReason);
+      showToast(`KYC Rejected for ${kycActionModal.user.name}`);
+    } else {
+      requestKycResubmit(kycActionModal.user.id, kycReason);
+      showToast(`Requested KYC Resubmission from ${kycActionModal.user.name}`);
+    }
+    setKycActionModal(null);
+  };
+
+  const filteredUsers = users.filter(u => {
+    const matchesSearch = u.name.toLowerCase().includes(searchTerm.toLowerCase()) ||
+                          u.email.toLowerCase().includes(searchTerm.toLowerCase()) ||
+                          u.id.toLowerCase().includes(searchTerm.toLowerCase());
+    const matchesStatus = statusFilter === 'ALL' || u.status === statusFilter;
+    return matchesSearch && matchesStatus;
+  });
 
   return (
-    <div className="fixed inset-0 z-50 flex items-center justify-center p-3 sm:p-6 bg-black/85 backdrop-blur-md animate-fadeIn">
+    <div className="fixed inset-0 z-50 flex items-center justify-center p-2 sm:p-4 bg-black/90 backdrop-blur-md animate-fadeIn">
       <div 
-        className="w-full max-w-6xl h-[90vh] bg-[#12140d] border border-[#6dff8a]/30 rounded-3xl shadow-2xl flex flex-col overflow-hidden text-left"
+        className="w-full max-w-7xl h-[92vh] bg-[#10120a] border border-[#6dff8a]/40 rounded-3xl shadow-2xl flex flex-col overflow-hidden text-left"
         onClick={(e) => e.stopPropagation()}
       >
         {/* Top Notification Toast */}
         {notification && (
-          <div className="bg-[#1b2b18] border-b border-[#6dff8a]/40 text-white px-4 py-2 text-xs text-center flex items-center justify-center gap-2">
+          <div className="bg-[#1b2b18] border-b border-[#6dff8a]/40 text-white px-4 py-2.5 text-xs text-center flex items-center justify-center gap-2 animate-fadeIn">
             <span className="w-2 h-2 rounded-full bg-[#6dff8a] animate-ping" />
             <span className="font-semibold">{notification}</span>
           </div>
@@ -110,18 +230,34 @@ export const AdminPortalModal: React.FC<AdminPortalModalProps> = ({ isOpen, onCl
             <TradeSharkLogo size="sm" showLtd={true} />
             <div className="h-5 w-px bg-white/15" />
             <div className="flex items-center gap-2">
-              <span className="text-sm sm:text-base font-bold text-white">Management Console</span>
-              <span className="text-[10px] bg-[#6dff8a] text-[#15170f] px-2 py-0.5 rounded-full font-bold uppercase tracking-wider">
+              <span className="text-sm sm:text-base font-bold text-white">Back-Office &amp; User Control Suite</span>
+              <span className="text-[10px] bg-[#6dff8a] text-[#15170f] px-2.5 py-0.5 rounded-full font-bold uppercase tracking-wider">
                 SUPER ADMIN
               </span>
             </div>
           </div>
 
-          <div className="flex items-center gap-3">
-            <div className="hidden sm:flex items-center gap-2 text-xs text-white/70 bg-black/40 px-3 py-1.5 rounded-xl border border-white/10">
-              <span className="w-2 h-2 rounded-full bg-[#6dff8a]" />
-              <span>Liquidity Engine: <strong>Operational</strong> (12ms)</span>
-            </div>
+          <div className="flex items-center gap-2 sm:gap-3">
+            {/* Quick Link to launch User Dashboard with chosen user */}
+            {onSwitchToUserDashboard && (
+              <button
+                onClick={onSwitchToUserDashboard}
+                className="hidden md:inline-flex items-center gap-1.5 px-3 py-1.5 rounded-xl bg-white/5 hover:bg-white/10 text-white/80 hover:text-white border border-white/10 text-xs font-semibold transition-colors"
+                title="Open client side view"
+              >
+                <Eye className="w-3.5 h-3.5 text-[#6dff8a]" />
+                <span>Open User View</span>
+              </button>
+            )}
+
+            {/* Quick Provision Account Button */}
+            <button
+              onClick={() => setActiveTab('setup')}
+              className="inline-flex items-center gap-1.5 px-3 sm:px-4 py-1.5 rounded-xl bg-[#6dff8a] text-[#15170f] text-xs font-bold hover:bg-[#5ce077] transition-colors shadow-sm"
+            >
+              <UserPlus className="w-3.5 h-3.5" />
+              <span>+ Setup User</span>
+            </button>
 
             <button
               onClick={onClose}
@@ -132,30 +268,44 @@ export const AdminPortalModal: React.FC<AdminPortalModalProps> = ({ isOpen, onCl
           </div>
         </div>
 
+        {/* System Telemetry & Pending Queues Ribbon */}
+        <div className="px-6 py-2.5 bg-[#14160d] border-b border-white/5 flex flex-wrap items-center justify-between gap-3 text-xs">
+          <div className="flex items-center gap-4 text-white/70">
+            <span className="flex items-center gap-1.5 text-[#6dff8a]">
+              <span className="w-2 h-2 rounded-full bg-[#6dff8a] animate-pulse" />
+              Engine: LD4 London (1.2ms)
+            </span>
+            <span className="hidden sm:inline text-white/40">|</span>
+            <span className="hidden sm:inline">Total Client Funds: <strong className="text-white">$842,610,940</strong></span>
+            <span className="hidden md:inline text-white/40">|</span>
+            <span className="hidden md:inline">Registered Accounts: <strong className="text-white">{users.length}</strong></span>
+          </div>
+
+          <div className="flex items-center gap-3">
+            {pendingKycCount > 0 && (
+              <button
+                onClick={() => setActiveTab('kyc')}
+                className="flex items-center gap-1.5 bg-yellow-400/15 border border-yellow-400/40 text-yellow-400 px-2.5 py-1 rounded-full font-bold text-[11px] hover:bg-yellow-400/25 transition-colors"
+              >
+                <AlertCircle className="w-3 h-3" />
+                <span>{pendingKycCount} KYC Pending</span>
+              </button>
+            )}
+
+            {pendingFundingCount > 0 && (
+              <button
+                onClick={() => setActiveTab('funding')}
+                className="flex items-center gap-1.5 bg-[#6dff8a]/15 border border-[#6dff8a]/40 text-[#6dff8a] px-2.5 py-1 rounded-full font-bold text-[11px] hover:bg-[#6dff8a]/25 transition-colors"
+              >
+                <DollarSign className="w-3 h-3" />
+                <span>{pendingFundingCount} Funding Requests</span>
+              </button>
+            )}
+          </div>
+        </div>
+
         {/* Tab Navigation */}
         <div className="flex border-b border-white/10 bg-[#14170d] px-6 gap-2 sm:gap-4 overflow-x-auto no-scrollbar">
-          <button
-            onClick={() => setActiveTab('overview')}
-            className={`py-3.5 px-3 text-xs sm:text-sm font-semibold border-b-2 whitespace-nowrap transition-colors flex items-center gap-2 ${
-              activeTab === 'overview'
-                ? 'border-[#6dff8a] text-[#6dff8a]'
-                : 'border-transparent text-white/60 hover:text-white'
-            }`}
-          >
-            <Activity className="w-4 h-4" />
-            <span>Platform Overview</span>
-          </button>
-          <button
-            onClick={() => setActiveTab('markets')}
-            className={`py-3.5 px-3 text-xs sm:text-sm font-semibold border-b-2 whitespace-nowrap transition-colors flex items-center gap-2 ${
-              activeTab === 'markets'
-                ? 'border-[#6dff8a] text-[#6dff8a]'
-                : 'border-transparent text-white/60 hover:text-white'
-            }`}
-          >
-            <Sliders className="w-4 h-4" />
-            <span>Market &amp; Asset Controls</span>
-          </button>
           <button
             onClick={() => setActiveTab('users')}
             className={`py-3.5 px-3 text-xs sm:text-sm font-semibold border-b-2 whitespace-nowrap transition-colors flex items-center gap-2 ${
@@ -165,102 +315,736 @@ export const AdminPortalModal: React.FC<AdminPortalModalProps> = ({ isOpen, onCl
             }`}
           >
             <Users className="w-4 h-4" />
-            <span>Users &amp; KYC Verification</span>
+            <span>Accounts &amp; Permissions</span>
+            <span className="px-1.5 py-0.2 rounded-full bg-white/10 text-[10px] font-bold text-white">
+              {users.length}
+            </span>
           </button>
+
           <button
-            onClick={() => setActiveTab('pro')}
+            onClick={() => setActiveTab('funding')}
             className={`py-3.5 px-3 text-xs sm:text-sm font-semibold border-b-2 whitespace-nowrap transition-colors flex items-center gap-2 ${
-              activeTab === 'pro'
+              activeTab === 'funding'
+                ? 'border-[#6dff8a] text-[#6dff8a]'
+                : 'border-transparent text-white/60 hover:text-white'
+            }`}
+          >
+            <DollarSign className="w-4 h-4" />
+            <span>Fundings &amp; Approvals</span>
+            {pendingFundingCount > 0 && (
+              <span className="px-1.5 py-0.2 rounded-full bg-[#6dff8a] text-[#15170f] text-[10px] font-bold">
+                {pendingFundingCount}
+              </span>
+            )}
+          </button>
+
+          <button
+            onClick={() => setActiveTab('kyc')}
+            className={`py-3.5 px-3 text-xs sm:text-sm font-semibold border-b-2 whitespace-nowrap transition-colors flex items-center gap-2 ${
+              activeTab === 'kyc'
                 ? 'border-[#6dff8a] text-[#6dff8a]'
                 : 'border-transparent text-white/60 hover:text-white'
             }`}
           >
             <Shield className="w-4 h-4" />
-            <span>CopyTrader™ Master</span>
+            <span>KYC &amp; Verification Desk</span>
+            {pendingKycCount > 0 && (
+              <span className="px-1.5 py-0.2 rounded-full bg-yellow-400 text-black text-[10px] font-bold">
+                {pendingKycCount}
+              </span>
+            )}
           </button>
+
           <button
-            onClick={() => setActiveTab('compliance')}
+            onClick={() => setActiveTab('setup')}
             className={`py-3.5 px-3 text-xs sm:text-sm font-semibold border-b-2 whitespace-nowrap transition-colors flex items-center gap-2 ${
-              activeTab === 'compliance'
+              activeTab === 'setup'
+                ? 'border-[#6dff8a] text-[#6dff8a]'
+                : 'border-transparent text-white/60 hover:text-white'
+            }`}
+          >
+            <UserPlus className="w-4 h-4" />
+            <span>Setup New Account</span>
+          </button>
+
+          <button
+            onClick={() => setActiveTab('markets')}
+            className={`py-3.5 px-3 text-xs sm:text-sm font-semibold border-b-2 whitespace-nowrap transition-colors flex items-center gap-2 ${
+              activeTab === 'markets'
+                ? 'border-[#6dff8a] text-[#6dff8a]'
+                : 'border-transparent text-white/60 hover:text-white'
+            }`}
+          >
+            <Sliders className="w-4 h-4" />
+            <span>Market Controls</span>
+          </button>
+
+          <button
+            onClick={() => setActiveTab('audit')}
+            className={`py-3.5 px-3 text-xs sm:text-sm font-semibold border-b-2 whitespace-nowrap transition-colors flex items-center gap-2 ${
+              activeTab === 'audit'
                 ? 'border-[#6dff8a] text-[#6dff8a]'
                 : 'border-transparent text-white/60 hover:text-white'
             }`}
           >
             <FileText className="w-4 h-4" />
-            <span>Regulatory Audit Logs</span>
+            <span>Regulatory Audit Trail</span>
           </button>
         </div>
 
-        {/* Tab Content */}
-        <div className="flex-1 overflow-y-auto p-6 space-y-6">
+        {/* Tab Contents */}
+        <div className="flex-1 overflow-y-auto p-4 sm:p-6 space-y-6">
 
-          {/* TAB 1: PLATFORM OVERVIEW */}
-          {activeTab === 'overview' && (
-            <div className="space-y-6">
-              <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-4 gap-4">
-                <div className="p-4 rounded-2xl bg-white/[0.03] border border-white/10 space-y-1">
-                  <span className="text-xs text-white/50 block">24h Gross Trading Volume</span>
-                  <span className="text-2xl font-bold text-white font-mono">$842,610,940</span>
-                  <span className="text-[11px] text-[#6dff8a] block">+14.2% vs previous day</span>
+          {/* TAB 1: ACCOUNTS & CONTROLS */}
+          {activeTab === 'users' && (
+            <div className="space-y-4">
+              {/* Filter & Search Bar */}
+              <div className="flex flex-wrap items-center justify-between gap-3 bg-white/[0.02] p-3 rounded-2xl border border-white/5">
+                <div className="flex items-center gap-2 flex-1 min-w-[240px]">
+                  <div className="relative w-full max-w-sm">
+                    <Search className="w-4 h-4 text-white/40 absolute left-3 top-1/2 -translate-y-1/2" />
+                    <input
+                      type="text"
+                      placeholder="Search trader by ID, name, or email..."
+                      value={searchTerm}
+                      onChange={(e) => setSearchTerm(e.target.value)}
+                      className="w-full bg-black/40 border border-white/10 rounded-xl pl-9 pr-4 py-2 text-xs text-white placeholder-white/40 focus:outline-none focus:border-[#6dff8a]"
+                    />
+                  </div>
+
+                  <div className="flex items-center gap-1 text-xs">
+                    {(['ALL', 'Active', 'Trading Frozen', 'Suspended'] as const).map((st) => (
+                      <button
+                        key={st}
+                        onClick={() => setStatusFilter(st)}
+                        className={`px-3 py-1.5 rounded-lg text-xs font-semibold transition-colors ${
+                          statusFilter === st 
+                            ? 'bg-[#6dff8a] text-[#15170f]' 
+                            : 'bg-white/5 text-white/60 hover:text-white'
+                        }`}
+                      >
+                        {st}
+                      </button>
+                    ))}
+                  </div>
                 </div>
-                <div className="p-4 rounded-2xl bg-white/[0.03] border border-white/10 space-y-1">
-                  <span className="text-xs text-white/50 block">Total Registered Traders</span>
-                  <span className="text-2xl font-bold text-white font-mono">40,184,219</span>
-                  <span className="text-[11px] text-white/60 block">75 active licensed jurisdictions</span>
-                </div>
-                <div className="p-4 rounded-2xl bg-white/[0.03] border border-white/10 space-y-1">
-                  <span className="text-xs text-white/50 block">Segregated Reserve Ratio</span>
-                  <span className="text-2xl font-bold text-[#6dff8a] font-mono">108.4%</span>
-                  <span className="text-[11px] text-[#6dff8a] block">Barclays &amp; BNY Mellon tier 1</span>
-                </div>
-                <div className="p-4 rounded-2xl bg-white/[0.03] border border-white/10 space-y-1">
-                  <span className="text-xs text-white/50 block">KYC Queued Reviews</span>
-                  <span className="text-2xl font-bold text-white font-mono">342</span>
-                  <span className="text-[11px] text-yellow-400 block">Avg turnaround 3.2 minutes</span>
+
+                <div className="text-xs text-white/60">
+                  Showing <strong>{filteredUsers.length}</strong> of <strong>{users.length}</strong> accounts
                 </div>
               </div>
 
-              {/* Server Nodes & Infrastructure Health */}
-              <div className="p-5 rounded-2xl bg-white/[0.03] border border-white/10 space-y-4">
-                <div className="flex items-center justify-between">
-                  <h4 className="font-bold text-white text-sm">TradeShark Core Infrastructure Status</h4>
-                  <span className="text-xs text-[#6dff8a] font-mono">ALL SYSTEMS NOMINAL</span>
-                </div>
+              {/* Users Table */}
+              <div className="border border-white/10 rounded-2xl overflow-hidden bg-black/20">
+                <div className="overflow-x-auto">
+                  <table className="w-full text-left text-xs">
+                    <thead className="bg-[#181b11] text-white/50 uppercase border-b border-white/10 font-mono text-[10px]">
+                      <tr>
+                        <th className="p-3.5">Trader ID &amp; Name</th>
+                        <th className="p-3.5">Tier &amp; Role</th>
+                        <th className="p-3.5">Real Balance</th>
+                        <th className="p-3.5">KYC Status</th>
+                        <th className="p-3.5">Account State</th>
+                        <th className="p-3.5">Trading Privileges</th>
+                        <th className="p-3.5 text-right">Back-Office Controls</th>
+                      </tr>
+                    </thead>
+                    <tbody className="divide-y divide-white/10">
+                      {filteredUsers.map((u) => {
+                        const isCurrent = currentUser.id === u.id;
+                        return (
+                          <tr key={u.id} className={`hover:bg-white/[0.02] transition-colors ${isCurrent ? 'bg-[#6dff8a]/[0.03]' : ''}`}>
+                            {/* User Info */}
+                            <td className="p-3.5">
+                              <div className="flex items-center gap-2.5">
+                                <div className="w-8 h-8 rounded-xl bg-white/10 border border-white/10 flex items-center justify-center font-bold text-xs text-white shrink-0">
+                                  {u.name.slice(0, 2).toUpperCase()}
+                                </div>
+                                <div>
+                                  <div className="font-bold text-white flex items-center gap-1.5">
+                                    <span>{u.name}</span>
+                                    {isCurrent && (
+                                      <span className="text-[9px] bg-[#6dff8a]/20 text-[#6dff8a] px-1.5 rounded font-mono font-bold">
+                                        ACTIVE TESTER
+                                      </span>
+                                    )}
+                                  </div>
+                                  <div className="text-[11px] text-white/40">{u.id} • {u.email}</div>
+                                </div>
+                              </div>
+                            </td>
 
-                <div className="grid grid-cols-1 sm:grid-cols-3 gap-3 text-xs">
-                  <div className="p-3 rounded-xl bg-black/40 border border-white/5 flex items-center justify-between">
-                    <div>
-                      <div className="text-white font-bold">Matching Engine (LD4 London)</div>
-                      <div className="text-white/40">Latency: 1.4ms • 99.999% uptime</div>
-                    </div>
-                    <span className="w-2.5 h-2.5 rounded-full bg-[#6dff8a]" />
-                  </div>
-                  <div className="p-3 rounded-xl bg-black/40 border border-white/5 flex items-center justify-between">
-                    <div>
-                      <div className="text-white font-bold">Crypto Cold Vaults (Fireblocks)</div>
-                      <div className="text-white/40">Multi-sig HSM active • Insured</div>
-                    </div>
-                    <span className="w-2.5 h-2.5 rounded-full bg-[#6dff8a]" />
-                  </div>
-                  <div className="p-3 rounded-xl bg-black/40 border border-white/5 flex items-center justify-between">
-                    <div>
-                      <div className="text-white font-bold">FCA / CySEC MiFID II Feed</div>
-                      <div className="text-white/40">Real-time reporting connected</div>
-                    </div>
-                    <span className="w-2.5 h-2.5 rounded-full bg-[#6dff8a]" />
-                  </div>
+                            {/* Tier */}
+                            <td className="p-3.5">
+                              <span className="text-white font-semibold block">{u.tier}</span>
+                              <span className="text-[10px] text-white/50 font-mono">Lev: 1:{u.leverage} • {u.country}</span>
+                            </td>
+
+                            {/* Balance */}
+                            <td className="p-3.5">
+                              <span className="font-mono font-bold text-sm text-white block">
+                                ${u.realBalance.toLocaleString(undefined, { minimumFractionDigits: 2 })}
+                              </span>
+                              <span className="text-[10px] text-[#6dff8a] font-mono">
+                                Demo: ${u.virtualBalance.toLocaleString()}
+                              </span>
+                            </td>
+
+                            {/* KYC */}
+                            <td className="p-3.5">
+                              <span className={`px-2 py-0.5 rounded text-[10px] font-bold inline-block ${
+                                u.kycStatus === 'Approved' 
+                                  ? 'bg-[#6dff8a]/20 text-[#6dff8a]' 
+                                  : u.kycStatus === 'Pending' || u.kycStatus === 'Under Review'
+                                  ? 'bg-yellow-400/20 text-yellow-400'
+                                  : 'bg-red-500/20 text-red-400'
+                              }`}>
+                                {u.kycStatus}
+                              </span>
+                              <span className="block text-[10px] text-white/40 mt-0.5">{u.kycDocType}</span>
+                            </td>
+
+                            {/* Status */}
+                            <td className="p-3.5">
+                              <span className={`px-2 py-0.5 rounded text-[10px] font-bold inline-block ${
+                                u.status === 'Active' 
+                                  ? 'bg-[#6dff8a]/20 text-[#6dff8a]' 
+                                  : u.status === 'Trading Frozen'
+                                  ? 'bg-orange-500/20 text-orange-300'
+                                  : 'bg-red-500/20 text-red-400'
+                              }`}>
+                                {u.status}
+                              </span>
+                            </td>
+
+                            {/* Privileges Toggles */}
+                            <td className="p-3.5">
+                              <div className="flex items-center gap-1.5">
+                                <button
+                                  onClick={() => toggleTradingPermission(u.id, 'allowTrading')}
+                                  title="Trade Execution"
+                                  className={`px-1.5 py-0.5 rounded text-[10px] font-mono font-bold transition-colors ${
+                                    u.allowTrading ? 'bg-[#6dff8a]/20 text-[#6dff8a]' : 'bg-white/10 text-white/30 line-through'
+                                  }`}
+                                >
+                                  TRADE
+                                </button>
+                                <button
+                                  onClick={() => toggleTradingPermission(u.id, 'allowShorting')}
+                                  title="Short Selling"
+                                  className={`px-1.5 py-0.5 rounded text-[10px] font-mono font-bold transition-colors ${
+                                    u.allowShorting ? 'bg-[#6dff8a]/20 text-[#6dff8a]' : 'bg-white/10 text-white/30 line-through'
+                                  }`}
+                                >
+                                  SHORT
+                                </button>
+                                <button
+                                  onClick={() => toggleTradingPermission(u.id, 'allowCrypto')}
+                                  title="Crypto Trading"
+                                  className={`px-1.5 py-0.5 rounded text-[10px] font-mono font-bold transition-colors ${
+                                    u.allowCrypto ? 'bg-[#6dff8a]/20 text-[#6dff8a]' : 'bg-white/10 text-white/30 line-through'
+                                  }`}
+                                >
+                                  CRYPTO
+                                </button>
+                              </div>
+                            </td>
+
+                            {/* Actions */}
+                            <td className="p-3.5 text-right space-x-1.5">
+                              {/* Adjust Funds Button */}
+                              <button
+                                onClick={() => {
+                                  setBalanceModalUser(u);
+                                  setAdjustAmount('2500');
+                                }}
+                                className="px-2 py-1 rounded-lg bg-white/10 hover:bg-[#6dff8a]/20 hover:text-[#6dff8a] text-white/80 text-[11px] font-semibold transition-colors"
+                                title="Credit, Debit, or Bonus adjustments"
+                              >
+                                Adjust Funds
+                              </button>
+
+                              {/* Inspect Full Controls */}
+                              <button
+                                onClick={() => setInspectingUser(u)}
+                                className="px-2.5 py-1 rounded-lg bg-[#6dff8a]/20 hover:bg-[#6dff8a] text-[#6dff8a] hover:text-[#15170f] text-[11px] font-bold transition-colors"
+                              >
+                                Control Panel
+                              </button>
+
+                              {/* Switch Active User */}
+                              <button
+                                onClick={() => {
+                                  setCurrentUserId(u.id);
+                                  showToast(`Switched active user session to ${u.name}`);
+                                }}
+                                className={`px-2 py-1 rounded-lg text-[11px] font-semibold transition-colors ${
+                                  isCurrent 
+                                    ? 'bg-[#6dff8a] text-[#15170f]' 
+                                    : 'bg-white/5 hover:bg-white/15 text-white/60 hover:text-white'
+                                }`}
+                                title="Switch current client perspective"
+                              >
+                                {isCurrent ? 'Active' : 'Impersonate'}
+                              </button>
+                            </td>
+                          </tr>
+                        );
+                      })}
+                    </tbody>
+                  </table>
                 </div>
               </div>
             </div>
           )}
 
-          {/* TAB 2: MARKET & ASSET CONTROLS */}
+          {/* TAB 2: FUNDINGS & APPROVALS */}
+          {activeTab === 'funding' && (
+            <div className="space-y-6">
+              <div className="grid grid-cols-1 sm:grid-cols-3 gap-4">
+                <div className="p-4 rounded-2xl bg-white/[0.03] border border-white/10 space-y-1">
+                  <span className="text-xs text-white/50 block">Pending Deposit Approvals</span>
+                  <span className="text-2xl font-bold text-[#6dff8a] font-mono">
+                    ${transactions.filter(t => t.type === 'Deposit' && t.status === 'Pending Approval')
+                      .reduce((acc, t) => acc + t.amount, 0).toLocaleString()}
+                  </span>
+                  <span className="text-[11px] text-white/60">
+                    {transactions.filter(t => t.type === 'Deposit' && t.status === 'Pending Approval').length} requests in queue
+                  </span>
+                </div>
+
+                <div className="p-4 rounded-2xl bg-white/[0.03] border border-white/10 space-y-1">
+                  <span className="text-xs text-white/50 block">Pending Withdrawal Releases</span>
+                  <span className="text-2xl font-bold text-yellow-400 font-mono">
+                    ${transactions.filter(t => t.type === 'Withdrawal' && t.status === 'Pending Approval')
+                      .reduce((acc, t) => acc + t.amount, 0).toLocaleString()}
+                  </span>
+                  <span className="text-[11px] text-white/60">
+                    {transactions.filter(t => t.type === 'Withdrawal' && t.status === 'Pending Approval').length} requests in queue
+                  </span>
+                </div>
+
+                <div className="p-4 rounded-2xl bg-white/[0.03] border border-white/10 space-y-1">
+                  <span className="text-xs text-white/50 block">Total Settled (24h)</span>
+                  <span className="text-2xl font-bold text-white font-mono">
+                    ${transactions.filter(t => t.status === 'Approved / Settled')
+                      .reduce((acc, t) => acc + t.amount, 0).toLocaleString()}
+                  </span>
+                  <span className="text-[11px] text-[#6dff8a]">Cleared with segregated custodian</span>
+                </div>
+              </div>
+
+              {/* Transactions Table */}
+              <div className="space-y-3">
+                <div className="flex items-center justify-between">
+                  <h4 className="text-sm font-bold text-white">Client Funding Requests &amp; Approvals</h4>
+                  <span className="text-xs text-white/40">1-click approve will immediately balance-sync with user account</span>
+                </div>
+
+                <div className="border border-white/10 rounded-2xl overflow-hidden bg-black/20">
+                  <table className="w-full text-left text-xs">
+                    <thead className="bg-[#181b11] text-white/50 uppercase border-b border-white/10 font-mono text-[10px]">
+                      <tr>
+                        <th className="p-3.5">Ref / Date</th>
+                        <th className="p-3.5">Client</th>
+                        <th className="p-3.5">Type &amp; Method</th>
+                        <th className="p-3.5">Amount ($USD)</th>
+                        <th className="p-3.5">Destination / Note</th>
+                        <th className="p-3.5">Status</th>
+                        <th className="p-3.5 text-right">Cashier Approval</th>
+                      </tr>
+                    </thead>
+                    <tbody className="divide-y divide-white/10">
+                      {transactions.map((tx) => (
+                        <tr key={tx.id} className="hover:bg-white/[0.02]">
+                          <td className="p-3.5 font-mono">
+                            <div className="text-white font-bold">{tx.reference}</div>
+                            <div className="text-white/40 text-[10px]">{tx.date}</div>
+                          </td>
+
+                          <td className="p-3.5">
+                            <div className="text-white font-semibold">{tx.userName}</div>
+                            <div className="text-white/40 text-[10px] font-mono">{tx.userId}</div>
+                          </td>
+
+                          <td className="p-3.5">
+                            <div className="flex items-center gap-1.5">
+                              <span className={`text-[10px] font-bold px-1.5 py-0.5 rounded ${
+                                tx.type === 'Deposit' ? 'bg-[#6dff8a]/20 text-[#6dff8a]' : 'bg-yellow-400/20 text-yellow-400'
+                              }`}>
+                                {tx.type}
+                              </span>
+                              <span className="text-white/80">{tx.method}</span>
+                            </div>
+                          </td>
+
+                          <td className="p-3.5 font-mono font-bold text-white text-sm">
+                            ${tx.amount.toLocaleString(undefined, { minimumFractionDigits: 2 })}
+                          </td>
+
+                          <td className="p-3.5 text-white/60 text-xs max-w-xs truncate">
+                            {tx.destination || tx.adminNote || 'Standard clearing rail'}
+                          </td>
+
+                          <td className="p-3.5">
+                            <span className={`px-2 py-0.5 rounded text-[10px] font-bold ${
+                              tx.status === 'Approved / Settled'
+                                ? 'bg-[#6dff8a]/20 text-[#6dff8a]'
+                                : tx.status === 'Pending Approval'
+                                ? 'bg-yellow-400/20 text-yellow-400 animate-pulse'
+                                : 'bg-red-500/20 text-red-400'
+                            }`}>
+                              {tx.status}
+                            </span>
+                          </td>
+
+                          <td className="p-3.5 text-right space-x-2">
+                            {tx.status === 'Pending Approval' ? (
+                              <>
+                                <button
+                                  onClick={() => {
+                                    approveFunding(tx.id);
+                                    showToast(`Approved ${tx.type} of $${tx.amount.toLocaleString()} for ${tx.userName}`);
+                                  }}
+                                  className="px-3 py-1 rounded-lg bg-[#6dff8a] hover:bg-[#5ce077] text-[#15170f] font-bold text-xs shadow-sm transition-all"
+                                >
+                                  Approve
+                                </button>
+                                <button
+                                  onClick={() => {
+                                    const reason = prompt('Enter rejection reason:');
+                                    if (reason) {
+                                      rejectFunding(tx.id, reason);
+                                      showToast(`Rejected ${tx.type} for ${tx.userName}`);
+                                    }
+                                  }}
+                                  className="px-2.5 py-1 rounded-lg bg-red-500/20 hover:bg-red-500 text-red-400 hover:text-white font-semibold text-xs transition-colors"
+                                >
+                                  Decline
+                                </button>
+                              </>
+                            ) : (
+                              <span className="text-[11px] text-white/40 font-mono">Complete</span>
+                            )}
+                          </td>
+                        </tr>
+                      ))}
+                    </tbody>
+                  </table>
+                </div>
+              </div>
+            </div>
+          )}
+
+          {/* TAB 3: KYC & VERIFICATION DESK */}
+          {activeTab === 'kyc' && (
+            <div className="space-y-4">
+              <div className="flex items-center justify-between">
+                <div>
+                  <h3 className="text-base font-bold text-white">KYC Document Inspection &amp; Approval Desk</h3>
+                  <p className="text-xs text-[#a3a89e]">Verify passport, national ID, and residence proofs with biometric MRZ validation.</p>
+                </div>
+              </div>
+
+              <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
+                {users.map((u) => (
+                  <div key={u.id} className="p-5 rounded-2xl bg-white/[0.03] border border-white/10 space-y-4">
+                    <div className="flex items-center justify-between">
+                      <div className="flex items-center gap-3">
+                        <div className="w-10 h-10 rounded-xl bg-[#6dff8a]/20 border border-[#6dff8a]/40 flex items-center justify-center font-bold text-white text-sm">
+                          {u.name.slice(0, 2).toUpperCase()}
+                        </div>
+                        <div>
+                          <h4 className="font-bold text-white text-sm">{u.name}</h4>
+                          <span className="text-xs text-white/50">{u.id} • {u.country}</span>
+                        </div>
+                      </div>
+
+                      <span className={`px-2.5 py-0.5 rounded-full text-[11px] font-bold ${
+                        u.kycStatus === 'Approved'
+                          ? 'bg-[#6dff8a]/20 text-[#6dff8a]'
+                          : u.kycStatus === 'Pending' || u.kycStatus === 'Under Review'
+                          ? 'bg-yellow-400/20 text-yellow-400'
+                          : 'bg-red-500/20 text-red-400'
+                      }`}>
+                        {u.kycStatus}
+                      </span>
+                    </div>
+
+                    {/* Document Details Card */}
+                    <div className="p-3.5 rounded-xl bg-black/40 border border-white/5 space-y-2 text-xs">
+                      <div className="grid grid-cols-2 gap-2">
+                        <div>
+                          <span className="text-white/40 block text-[10px]">Document Type</span>
+                          <span className="font-bold text-white">{u.kycDocType}</span>
+                        </div>
+                        <div>
+                          <span className="text-white/40 block text-[10px]">Document Reference</span>
+                          <span className="font-mono text-white">{u.kycDocNumber}</span>
+                        </div>
+                      </div>
+
+                      <div className="grid grid-cols-2 gap-2 pt-1 border-t border-white/5">
+                        <div>
+                          <span className="text-white/40 block text-[10px]">Biometric Match</span>
+                          <span className="font-mono font-bold text-[#6dff8a]">{u.facialMatchScore || 98.4}% Match</span>
+                        </div>
+                        <div>
+                          <span className="text-white/40 block text-[10px]">AML Risk Profile</span>
+                          <span className={`font-bold ${u.amlRisk === 'High' ? 'text-red-400' : 'text-white'}`}>
+                            {u.amlRisk} Risk {u.pepWatchlistHit ? '(PEP Match)' : '(Clean)'}
+                          </span>
+                        </div>
+                      </div>
+
+                      {u.kycNotes && (
+                        <div className="p-2 rounded bg-yellow-400/10 border border-yellow-400/20 text-[11px] text-yellow-300">
+                          <strong>Admin Note:</strong> {u.kycNotes}
+                        </div>
+                      )}
+                    </div>
+
+                    {/* Approval & Rejection Buttons */}
+                    <div className="flex items-center justify-between pt-1 gap-2">
+                      <div className="flex items-center gap-1.5">
+                        <select
+                          value={u.amlRisk}
+                          onChange={(e) => updateAmlRisk(u.id, e.target.value as any)}
+                          className="bg-black/40 border border-white/15 rounded-lg px-2 py-1 text-[11px] text-white focus:outline-none"
+                        >
+                          <option value="Low">Low Risk</option>
+                          <option value="Medium">Medium Risk</option>
+                          <option value="High">High Risk</option>
+                        </select>
+                      </div>
+
+                      <div className="flex items-center gap-2">
+                        {u.kycStatus !== 'Approved' && (
+                          <button
+                            onClick={() => {
+                              approveKyc(u.id);
+                              showToast(`KYC Approved for ${u.name}. Upgraded to Tier 2 Verified!`);
+                            }}
+                            className="px-3 py-1.5 rounded-lg bg-[#6dff8a] hover:bg-[#5ce077] text-[#15170f] font-bold text-xs transition-colors"
+                          >
+                            Approve KYC
+                          </button>
+                        )}
+
+                        <button
+                          onClick={() => {
+                            setKycActionModal({ user: u, mode: 'resubmit' });
+                          }}
+                          className="px-2.5 py-1.5 rounded-lg bg-white/10 hover:bg-white/15 text-white/80 text-xs font-semibold transition-colors"
+                        >
+                          Request Re-upload
+                        </button>
+
+                        {u.kycStatus !== 'Rejected' && (
+                          <button
+                            onClick={() => {
+                              setKycActionModal({ user: u, mode: 'reject' });
+                            }}
+                            className="px-2.5 py-1.5 rounded-lg bg-red-500/20 hover:bg-red-500 text-red-400 hover:text-white text-xs font-semibold transition-colors"
+                          >
+                            Decline
+                          </button>
+                        )}
+                      </div>
+                    </div>
+                  </div>
+                ))}
+              </div>
+            </div>
+          )}
+
+          {/* TAB 4: SETUP NEW ACCOUNT (FULL PROVISIONING) */}
+          {activeTab === 'setup' && (
+            <div className="max-w-3xl mx-auto space-y-6 py-2">
+              <div className="space-y-1 text-center">
+                <h3 className="text-xl font-bold text-white">Full User Account Provisioning</h3>
+                <p className="text-xs text-[#a3a89e]">
+                  Setup a complete client account with custom tiers, leverage, starting funded balance, and compliance checks.
+                </p>
+              </div>
+
+              <form onSubmit={handleCreateUserSubmit} className="p-6 rounded-3xl bg-white/[0.03] border border-white/10 space-y-6">
+                <div className="grid grid-cols-1 sm:grid-cols-2 gap-4">
+                  {/* Full Name */}
+                  <div className="space-y-1.5">
+                    <label className="text-xs text-white/70 block">Full Legal Name</label>
+                    <input
+                      type="text"
+                      required
+                      placeholder="e.g. Jonathan Hayes"
+                      value={newUserName}
+                      onChange={(e) => setNewUserName(e.target.value)}
+                      className="w-full bg-black/50 border border-white/15 rounded-xl px-3.5 py-2.5 text-xs text-white focus:outline-none focus:border-[#6dff8a]"
+                    />
+                  </div>
+
+                  {/* Email */}
+                  <div className="space-y-1.5">
+                    <label className="text-xs text-white/70 block">Email Address</label>
+                    <input
+                      type="email"
+                      required
+                      placeholder="e.g. jhayes@hedgefund.com"
+                      value={newUserEmail}
+                      onChange={(e) => setNewUserEmail(e.target.value)}
+                      className="w-full bg-black/50 border border-white/15 rounded-xl px-3.5 py-2.5 text-xs text-white focus:outline-none focus:border-[#6dff8a]"
+                    />
+                  </div>
+
+                  {/* Phone */}
+                  <div className="space-y-1.5">
+                    <label className="text-xs text-white/70 block">Phone Number</label>
+                    <input
+                      type="text"
+                      value={newUserPhone}
+                      onChange={(e) => setNewUserPhone(e.target.value)}
+                      className="w-full bg-black/50 border border-white/15 rounded-xl px-3.5 py-2.5 text-xs text-white focus:outline-none focus:border-[#6dff8a]"
+                    />
+                  </div>
+
+                  {/* Country */}
+                  <div className="space-y-1.5">
+                    <label className="text-xs text-white/70 block">Country of Residence</label>
+                    <input
+                      type="text"
+                      value={newUserCountry}
+                      onChange={(e) => setNewUserCountry(e.target.value)}
+                      className="w-full bg-black/50 border border-white/15 rounded-xl px-3.5 py-2.5 text-xs text-white focus:outline-none focus:border-[#6dff8a]"
+                    />
+                  </div>
+
+                  {/* Account Tier */}
+                  <div className="space-y-1.5">
+                    <label className="text-xs text-white/70 block">Account Tier</label>
+                    <select
+                      value={newUserTier}
+                      onChange={(e) => setNewUserTier(e.target.value as UserTier)}
+                      className="w-full bg-black/50 border border-white/15 rounded-xl px-3.5 py-2.5 text-xs text-white focus:outline-none focus:border-[#6dff8a]"
+                    >
+                      <option value="Tier 1 - Standard">Tier 1 - Standard (Retail)</option>
+                      <option value="Tier 2 - Verified Pro">Tier 2 - Verified Pro</option>
+                      <option value="Tier 3 - VIP Institutional">Tier 3 - VIP Institutional</option>
+                    </select>
+                  </div>
+
+                  {/* Leverage */}
+                  <div className="space-y-1.5">
+                    <label className="text-xs text-white/70 block">Max Leverage Allocation</label>
+                    <select
+                      value={newUserLeverage}
+                      onChange={(e) => setNewUserLeverage(e.target.value)}
+                      className="w-full bg-black/50 border border-white/15 rounded-xl px-3.5 py-2.5 text-xs text-white focus:outline-none focus:border-[#6dff8a]"
+                    >
+                      <option value="30">1:30 (FCA / ESMA Standard)</option>
+                      <option value="100">1:100 (Pro Investor)</option>
+                      <option value="200">1:200 (Experienced Trader)</option>
+                      <option value="400">1:400 (VIP Institutional)</option>
+                    </select>
+                  </div>
+
+                  {/* Initial Deposit Balance */}
+                  <div className="space-y-1.5">
+                    <label className="text-xs text-white/70 block">Initial Funded Balance ($USD)</label>
+                    <div className="relative">
+                      <DollarSign className="w-4 h-4 text-[#6dff8a] absolute left-3 top-1/2 -translate-y-1/2" />
+                      <input
+                        type="number"
+                        min="0"
+                        step="100"
+                        value={newUserBalance}
+                        onChange={(e) => setNewUserBalance(e.target.value)}
+                        className="w-full bg-black/50 border border-white/15 rounded-xl pl-9 pr-4 py-2.5 text-xs text-white font-mono font-bold focus:outline-none focus:border-[#6dff8a]"
+                      />
+                    </div>
+                  </div>
+
+                  {/* Account Manager */}
+                  <div className="space-y-1.5">
+                    <label className="text-xs text-white/70 block">Assigned Account Manager</label>
+                    <select
+                      value={newUserAccountManager}
+                      onChange={(e) => setNewUserAccountManager(e.target.value)}
+                      className="w-full bg-black/50 border border-white/15 rounded-xl px-3.5 py-2.5 text-xs text-white focus:outline-none focus:border-[#6dff8a]"
+                    >
+                      <option value="David Sterling">David Sterling (Senior Desk)</option>
+                      <option value="Victoria Sterling (VIP Desk)">Victoria Sterling (VIP Desk)</option>
+                      <option value="Michael Wong">Michael Wong (APAC Desk)</option>
+                      <option value="Sarah Jenkins">Sarah Jenkins (Crypto Desk)</option>
+                    </select>
+                  </div>
+                </div>
+
+                {/* Identity & Privileges Toggles */}
+                <div className="p-4 rounded-2xl bg-black/30 border border-white/10 space-y-3">
+                  <h4 className="text-xs font-bold text-white uppercase tracking-wider">
+                    Permissions &amp; Verification Flags
+                  </h4>
+                  <div className="grid grid-cols-1 sm:grid-cols-2 gap-3 text-xs">
+                    <label className="flex items-center gap-2 cursor-pointer">
+                      <input
+                        type="checkbox"
+                        checked={newUserAutoVerify}
+                        onChange={(e) => setNewUserAutoVerify(e.target.checked)}
+                        className="rounded border-white/20 text-[#6dff8a] focus:ring-0"
+                      />
+                      <span className="text-white/90">Auto-Approve KYC (Instant Verified Status)</span>
+                    </label>
+
+                    <label className="flex items-center gap-2 cursor-pointer">
+                      <input
+                        type="checkbox"
+                        checked={newUserAllowTrading}
+                        onChange={(e) => setNewUserAllowTrading(e.target.checked)}
+                        className="rounded border-white/20 text-[#6dff8a] focus:ring-0"
+                      />
+                      <span className="text-white/90">Enable Market Trading Privileges</span>
+                    </label>
+
+                    <label className="flex items-center gap-2 cursor-pointer">
+                      <input
+                        type="checkbox"
+                        checked={newUserAllowShorting}
+                        onChange={(e) => setNewUserAllowShorting(e.target.checked)}
+                        className="rounded border-white/20 text-[#6dff8a] focus:ring-0"
+                      />
+                      <span className="text-white/90">Enable Short Selling Privileges</span>
+                    </label>
+
+                    <label className="flex items-center gap-2 cursor-pointer">
+                      <input
+                        type="checkbox"
+                        checked={newUserAllowCrypto}
+                        onChange={(e) => setNewUserAllowCrypto(e.target.checked)}
+                        className="rounded border-white/20 text-[#6dff8a] focus:ring-0"
+                      />
+                      <span className="text-white/90">Enable Crypto Derivative Trading</span>
+                    </label>
+                  </div>
+                </div>
+
+                <button
+                  type="submit"
+                  className="w-full py-3.5 rounded-2xl bg-[#6dff8a] hover:bg-[#5ce077] text-[#15170f] font-bold text-sm shadow-[0_0_25px_rgba(109,255,138,0.25)] transition-all flex items-center justify-center gap-2"
+                >
+                  <UserPlus className="w-4 h-4" />
+                  <span>Provision Account &amp; Release Initial Funds</span>
+                </button>
+              </form>
+            </div>
+          )}
+
+          {/* TAB 5: MARKET CONTROLS */}
           {activeTab === 'markets' && (
             <div className="space-y-4">
               <div className="flex items-center justify-between">
                 <div>
                   <h3 className="text-base font-bold text-white">Market Asset Administration</h3>
-                  <p className="text-xs text-[#a3a89e]">Halt trading, adjust spreads, or inspect instrument liquidity.</p>
+                  <p className="text-xs text-[#a3a89e]">Emergency halt trading, adjust spreads, and inspect liquidity feeds.</p>
                 </div>
                 <button
                   onClick={() => showToast('All asset prices synced with Thomson Reuters & Bloomberg feeds.')}
@@ -271,7 +1055,7 @@ export const AdminPortalModal: React.FC<AdminPortalModalProps> = ({ isOpen, onCl
                 </button>
               </div>
 
-              <div className="border border-white/10 rounded-2xl overflow-hidden">
+              <div className="border border-white/10 rounded-2xl overflow-hidden bg-black/20">
                 <table className="w-full text-left text-xs">
                   <thead className="bg-[#181b11] text-white/50 uppercase border-b border-white/10 font-mono text-[10px]">
                     <tr>
@@ -283,7 +1067,7 @@ export const AdminPortalModal: React.FC<AdminPortalModalProps> = ({ isOpen, onCl
                       <th className="p-3.5 text-right">Emergency Control</th>
                     </tr>
                   </thead>
-                  <tbody className="divide-y divide-white/10 bg-black/20">
+                  <tbody className="divide-y divide-white/10">
                     {marketAssets.map((asset) => (
                       <tr key={asset.symbol} className="hover:bg-white/[0.02]">
                         <td className="p-3.5 font-bold text-white flex items-center gap-2">
@@ -320,152 +1104,35 @@ export const AdminPortalModal: React.FC<AdminPortalModalProps> = ({ isOpen, onCl
             </div>
           )}
 
-          {/* TAB 3: USERS & KYC VERIFICATION */}
-          {activeTab === 'users' && (
+          {/* TAB 6: AUDIT TRAIL */}
+          {activeTab === 'audit' && (
             <div className="space-y-4">
               <div className="flex items-center justify-between">
                 <div>
-                  <h3 className="text-base font-bold text-white">User Accounts &amp; KYC Verification</h3>
-                  <p className="text-xs text-[#a3a89e]">Review identification documents and regulate trader permissions.</p>
-                </div>
-              </div>
-
-              <div className="border border-white/10 rounded-2xl overflow-hidden">
-                <table className="w-full text-left text-xs">
-                  <thead className="bg-[#181b11] text-white/50 uppercase border-b border-white/10 font-mono text-[10px]">
-                    <tr>
-                      <th className="p-3.5">User ID</th>
-                      <th className="p-3.5">Trader Name</th>
-                      <th className="p-3.5">Balance</th>
-                      <th className="p-3.5">KYC Status</th>
-                      <th className="p-3.5">Account State</th>
-                      <th className="p-3.5 text-right">Actions</th>
-                    </tr>
-                  </thead>
-                  <tbody className="divide-y divide-white/10 bg-black/20">
-                    {usersList.map((user) => (
-                      <tr key={user.id} className="hover:bg-white/[0.02]">
-                        <td className="p-3.5 font-mono text-white/50">{user.id}</td>
-                        <td className="p-3.5">
-                          <div className="font-bold text-white">{user.name}</div>
-                          <div className="text-[11px] text-white/40">{user.email}</div>
-                        </td>
-                        <td className="p-3.5 font-mono font-bold text-white">{user.balance}</td>
-                        <td className="p-3.5">
-                          <span className={`px-2 py-0.5 rounded text-[10px] font-bold ${
-                            user.kycStatus === 'Approved' 
-                              ? 'bg-[#6dff8a]/20 text-[#6dff8a]' 
-                              : 'bg-yellow-400/20 text-yellow-400'
-                          }`}>
-                            {user.kycStatus}
-                          </span>
-                        </td>
-                        <td className="p-3.5">
-                          <span className={`px-2 py-0.5 rounded text-[10px] font-bold ${
-                            user.active ? 'bg-white/10 text-white' : 'bg-[#ff5c5c]/20 text-[#ff5c5c]'
-                          }`}>
-                            {user.active ? 'Active' : 'Suspended'}
-                          </span>
-                        </td>
-                        <td className="p-3.5 text-right space-x-2">
-                          {user.kycStatus !== 'Approved' && (
-                            <button
-                              onClick={() => approveKyc(user.id)}
-                              className="px-2.5 py-1 rounded bg-[#6dff8a]/20 hover:bg-[#6dff8a] text-[#6dff8a] hover:text-[#15170f] text-[11px] font-bold transition-colors"
-                            >
-                              Approve KYC
-                            </button>
-                          )}
-                          <button
-                            onClick={() => toggleUserStatus(user.id)}
-                            className={`px-2.5 py-1 rounded text-[11px] font-bold transition-colors ${
-                              user.active 
-                                ? 'bg-white/10 hover:bg-[#ff5c5c]/20 hover:text-[#ff5c5c] text-white/70' 
-                                : 'bg-[#6dff8a] text-[#15170f]'
-                            }`}
-                          >
-                            {user.active ? 'Suspend' : 'Reactivate'}
-                          </button>
-                        </td>
-                      </tr>
-                    ))}
-                  </tbody>
-                </table>
-              </div>
-            </div>
-          )}
-
-          {/* TAB 4: COPYTRADER MASTER */}
-          {activeTab === 'pro' && (
-            <div className="space-y-4">
-              <div className="flex items-center justify-between">
-                <div>
-                  <h3 className="text-base font-bold text-white">Pro Investor Directory Moderation</h3>
-                  <p className="text-xs text-[#a3a89e]">Approve and evaluate traders permitted to receive public copier funds.</p>
-                </div>
-              </div>
-
-              <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
-                {proCandidates.map((pro) => (
-                  <div key={pro.id} className="p-5 rounded-2xl bg-white/[0.03] border border-white/10 space-y-3">
-                    <div className="flex items-center justify-between">
-                      <h4 className="font-bold text-white">{pro.name}</h4>
-                      <span className="px-2 py-0.5 rounded text-[10px] font-bold bg-[#6dff8a]/20 text-[#6dff8a]">
-                        {pro.status}
-                      </span>
-                    </div>
-
-                    <div className="grid grid-cols-3 gap-2 text-xs bg-black/40 p-3 rounded-xl">
-                      <div>
-                        <span className="text-white/40 block text-[10px]">24M Return:</span>
-                        <span className="font-bold text-[#6dff8a] font-mono">{pro.return24M}</span>
-                      </div>
-                      <div>
-                        <span className="text-white/40 block text-[10px]">Risk Score:</span>
-                        <span className="font-bold text-white font-mono">{pro.riskScore} / 10</span>
-                      </div>
-                      <div>
-                        <span className="text-white/40 block text-[10px]">Pending Copiers:</span>
-                        <span className="font-bold text-white font-mono">{pro.copiersRequest}</span>
-                      </div>
-                    </div>
-
-                    <div className="flex items-center justify-end gap-2 pt-2">
-                      <button
-                        onClick={() => showToast(`Audit complete for ${pro.name}. Profile certified.`)}
-                        className="px-3 py-1.5 rounded-lg bg-[#6dff8a] text-[#15170f] font-bold text-xs"
-                      >
-                        Certify Pro Status
-                      </button>
-                    </div>
-                  </div>
-                ))}
-              </div>
-            </div>
-          )}
-
-          {/* TAB 5: REGULATORY AUDIT LOGS */}
-          {activeTab === 'compliance' && (
-            <div className="space-y-4">
-              <div className="flex items-center justify-between">
-                <div>
-                  <h3 className="text-base font-bold text-white">Regulatory Audit Trail &amp; Filings</h3>
-                  <p className="text-xs text-[#a3a89e]">FCA, CySEC &amp; ASIC automated daily compliance log exports.</p>
+                  <h3 className="text-base font-bold text-white">Immutable Regulatory Audit Trail</h3>
+                  <p className="text-xs text-[#a3a89e]">Real-time system events, administrative balance changes, and KYC decisions.</p>
                 </div>
                 <button
-                  onClick={() => showToast('Generated MiFID II RTS 28 Best Execution PDF report.')}
+                  onClick={() => showToast('Exported audit logs to compliance CSV file.')}
                   className="px-4 py-2 rounded-xl bg-[#6dff8a] text-[#15170f] font-bold text-xs"
                 >
-                  Export RTS 28 Report
+                  Export CSV Logs
                 </button>
               </div>
 
-              <div className="p-4 rounded-2xl bg-black/40 border border-white/10 font-mono text-xs text-white/80 space-y-2 max-h-72 overflow-y-auto">
-                <div className="text-[#6dff8a]">[2026-09-10 13:28:40] FCA BEST EXECUTION REPORT #TR-9041 GENERATED</div>
-                <div>[2026-09-10 13:22:15] Segregated Client Trust Account Reconciliation: Balanced ($842.6M)</div>
-                <div>[2026-09-10 13:15:02] CySEC Investor Compensation Fund (ICF) Assessment: Compliant</div>
-                <div>[2026-09-10 12:44:11] Fireblocks Vault Rebalance: 1,400 BTC shifted to cold offline storage</div>
-                <div>[2026-09-10 12:01:00] Daily Market Close Settled: Zero client margin deficits reported</div>
+              <div className="border border-white/10 rounded-2xl overflow-hidden bg-black/40 p-4 space-y-2 max-h-[60vh] overflow-y-auto font-mono text-xs">
+                {auditLogs.map((log) => (
+                  <div key={log.id} className="p-3 rounded-xl bg-white/[0.02] border border-white/5 space-y-1 hover:border-white/10">
+                    <div className="flex items-center justify-between text-[11px]">
+                      <span className="text-[#6dff8a] font-bold">[{log.timestamp}] {log.action}</span>
+                      <span className="text-white/40">{log.adminUser} • {log.type}</span>
+                    </div>
+                    <div className="text-white/80">{log.details}</div>
+                    {log.targetUser && (
+                      <div className="text-white/40 text-[10px]">Target Account: {log.targetUser}</div>
+                    )}
+                  </div>
+                ))}
               </div>
             </div>
           )}
@@ -473,6 +1140,311 @@ export const AdminPortalModal: React.FC<AdminPortalModalProps> = ({ isOpen, onCl
         </div>
 
       </div>
+
+      {/* ========================================================= */}
+      {/* MODAL 1: DEEP ACCOUNT CONTROL PANEL (INSPECTING USER) */}
+      {/* ========================================================= */}
+      {inspectingUser && (
+        <div className="fixed inset-0 z-60 flex items-center justify-center p-3 bg-black/80 backdrop-blur-md">
+          <div className="w-full max-w-2xl bg-[#171a10] border border-[#6dff8a]/40 rounded-3xl p-6 shadow-2xl space-y-5 text-left">
+            <div className="flex items-center justify-between border-b border-white/10 pb-4">
+              <div className="flex items-center gap-3">
+                <div className="w-10 h-10 rounded-xl bg-[#6dff8a]/20 border border-[#6dff8a]/40 flex items-center justify-center font-bold text-white text-sm">
+                  {inspectingUser.name.slice(0, 2).toUpperCase()}
+                </div>
+                <div>
+                  <h3 className="text-base font-bold text-white">{inspectingUser.name}</h3>
+                  <p className="text-xs text-white/50">{inspectingUser.id} • {inspectingUser.email}</p>
+                </div>
+              </div>
+              <button 
+                onClick={() => setInspectingUser(null)}
+                className="p-2 rounded-full bg-white/5 hover:bg-white/10 text-white/70 hover:text-white"
+              >
+                <X className="w-4 h-4" />
+              </button>
+            </div>
+
+            {/* Quick Status Control */}
+            <div className="grid grid-cols-2 sm:grid-cols-4 gap-2 text-xs">
+              <div>
+                <span className="text-white/40 block text-[10px]">Account State</span>
+                <select
+                  value={inspectingUser.status}
+                  onChange={(e) => {
+                    setUserStatus(inspectingUser.id, e.target.value as AccountStatus, 'Admin override');
+                    setInspectingUser(prev => prev ? { ...prev, status: e.target.value as AccountStatus } : null);
+                    showToast(`Status updated to ${e.target.value}`);
+                  }}
+                  className="w-full mt-1 bg-black/40 border border-white/15 rounded-lg px-2.5 py-1.5 text-xs text-white font-bold"
+                >
+                  <option value="Active">Active</option>
+                  <option value="Trading Frozen">Trading Frozen</option>
+                  <option value="Suspended">Suspended</option>
+                  <option value="AML Flagged">AML Flagged</option>
+                </select>
+              </div>
+
+              <div>
+                <span className="text-white/40 block text-[10px]">Account Tier</span>
+                <select
+                  value={inspectingUser.tier}
+                  onChange={(e) => {
+                    updateUserTier(inspectingUser.id, e.target.value as UserTier);
+                    setInspectingUser(prev => prev ? { ...prev, tier: e.target.value as UserTier } : null);
+                    showToast(`Tier updated to ${e.target.value}`);
+                  }}
+                  className="w-full mt-1 bg-black/40 border border-white/15 rounded-lg px-2.5 py-1.5 text-xs text-white font-bold"
+                >
+                  <option value="Tier 1 - Standard">Tier 1 - Standard</option>
+                  <option value="Tier 2 - Verified Pro">Tier 2 - Verified Pro</option>
+                  <option value="Tier 3 - VIP Institutional">Tier 3 - VIP Institutional</option>
+                </select>
+              </div>
+
+              <div>
+                <span className="text-white/40 block text-[10px]">Leverage Limit</span>
+                <select
+                  value={inspectingUser.leverage}
+                  onChange={(e) => {
+                    const lev = parseInt(e.target.value, 10);
+                    updateUserLeverage(inspectingUser.id, lev);
+                    setInspectingUser(prev => prev ? { ...prev, leverage: lev } : null);
+                    showToast(`Leverage updated to 1:${lev}`);
+                  }}
+                  className="w-full mt-1 bg-black/40 border border-white/15 rounded-lg px-2.5 py-1.5 text-xs text-white font-bold"
+                >
+                  <option value="30">1:30</option>
+                  <option value="50">1:50</option>
+                  <option value="100">1:100</option>
+                  <option value="200">1:200</option>
+                  <option value="400">1:400</option>
+                </select>
+              </div>
+
+              <div>
+                <span className="text-white/40 block text-[10px]">AML Risk</span>
+                <select
+                  value={inspectingUser.amlRisk}
+                  onChange={(e) => {
+                    updateAmlRisk(inspectingUser.id, e.target.value as any);
+                    setInspectingUser(prev => prev ? { ...prev, amlRisk: e.target.value as any } : null);
+                  }}
+                  className="w-full mt-1 bg-black/40 border border-white/15 rounded-lg px-2.5 py-1.5 text-xs text-white font-bold"
+                >
+                  <option value="Low">Low Risk</option>
+                  <option value="Medium">Medium Risk</option>
+                  <option value="High">High Risk</option>
+                </select>
+              </div>
+            </div>
+
+            {/* Trading Restrictions Toggle Bar */}
+            <div className="p-4 rounded-2xl bg-black/40 border border-white/10 space-y-3">
+              <h4 className="text-xs font-bold text-white uppercase tracking-wider">
+                Trading Privileges &amp; Risk Boundaries
+              </h4>
+              <div className="grid grid-cols-3 gap-2">
+                <button
+                  onClick={() => {
+                    toggleTradingPermission(inspectingUser.id, 'allowTrading');
+                    setInspectingUser(prev => prev ? { ...prev, allowTrading: !prev.allowTrading } : null);
+                  }}
+                  className={`p-3 rounded-xl border text-center font-bold text-xs transition-colors ${
+                    inspectingUser.allowTrading
+                      ? 'bg-[#6dff8a]/15 border-[#6dff8a]/40 text-[#6dff8a]'
+                      : 'bg-red-500/10 border-red-500/30 text-red-400'
+                  }`}
+                >
+                  {inspectingUser.allowTrading ? 'Trading: ALLOWED' : 'Trading: BLOCKED'}
+                </button>
+
+                <button
+                  onClick={() => {
+                    toggleTradingPermission(inspectingUser.id, 'allowShorting');
+                    setInspectingUser(prev => prev ? { ...prev, allowShorting: !prev.allowShorting } : null);
+                  }}
+                  className={`p-3 rounded-xl border text-center font-bold text-xs transition-colors ${
+                    inspectingUser.allowShorting
+                      ? 'bg-[#6dff8a]/15 border-[#6dff8a]/40 text-[#6dff8a]'
+                      : 'bg-white/5 border-white/10 text-white/40'
+                  }`}
+                >
+                  {inspectingUser.allowShorting ? 'Shorting: ENABLED' : 'Shorting: DISABLED'}
+                </button>
+
+                <button
+                  onClick={() => {
+                    toggleTradingPermission(inspectingUser.id, 'allowCrypto');
+                    setInspectingUser(prev => prev ? { ...prev, allowCrypto: !prev.allowCrypto } : null);
+                  }}
+                  className={`p-3 rounded-xl border text-center font-bold text-xs transition-colors ${
+                    inspectingUser.allowCrypto
+                      ? 'bg-[#6dff8a]/15 border-[#6dff8a]/40 text-[#6dff8a]'
+                      : 'bg-white/5 border-white/10 text-white/40'
+                  }`}
+                >
+                  {inspectingUser.allowCrypto ? 'Crypto: ENABLED' : 'Crypto: DISABLED'}
+                </button>
+              </div>
+            </div>
+
+            {/* Account Manager & Balance Adjustment Quick Link */}
+            <div className="flex items-center justify-between pt-2">
+              <button
+                onClick={() => {
+                  setBalanceModalUser(inspectingUser);
+                  setInspectingUser(null);
+                }}
+                className="px-4 py-2 rounded-xl bg-white/10 hover:bg-[#6dff8a] hover:text-[#15170f] text-white text-xs font-bold transition-all"
+              >
+                💵 Manual Credit / Debit Adjustment
+              </button>
+
+              <button
+                onClick={() => {
+                  showToast(`Sent 2FA reset & session termination to ${inspectingUser.email}`);
+                  setInspectingUser(null);
+                }}
+                className="px-3 py-2 rounded-xl bg-red-500/20 hover:bg-red-500 text-red-300 hover:text-white text-xs font-semibold transition-colors"
+              >
+                Force Session Reset &amp; Invalidate Keys
+              </button>
+            </div>
+          </div>
+        </div>
+      )}
+
+      {/* ========================================================= */}
+      {/* MODAL 2: MANUAL BALANCE ADJUSTMENT MODAL */}
+      {/* ========================================================= */}
+      {balanceModalUser && (
+        <div className="fixed inset-0 z-60 flex items-center justify-center p-3 bg-black/80 backdrop-blur-md">
+          <div className="w-full max-w-md bg-[#181b11] border border-[#6dff8a]/40 rounded-3xl p-6 shadow-2xl space-y-4 text-left">
+            <div className="flex items-center justify-between border-b border-white/10 pb-3">
+              <div>
+                <h3 className="text-base font-bold text-white">Manual Balance Adjustment</h3>
+                <p className="text-xs text-white/50">{balanceModalUser.name} • Balance: ${balanceModalUser.realBalance.toLocaleString()}</p>
+              </div>
+              <button 
+                onClick={() => setBalanceModalUser(null)}
+                className="p-2 rounded-full bg-white/5 hover:bg-white/10 text-white/70 hover:text-white"
+              >
+                <X className="w-4 h-4" />
+              </button>
+            </div>
+
+            <form onSubmit={handleExecuteBalanceAdjustment} className="space-y-4">
+              <div className="space-y-1">
+                <label className="text-xs text-white/70 block">Adjustment Type</label>
+                <div className="grid grid-cols-3 gap-2">
+                  {(['Admin Credit', 'Admin Debit', 'Bonus'] as const).map((t) => (
+                    <button
+                      key={t}
+                      type="button"
+                      onClick={() => setAdjustType(t)}
+                      className={`py-2 rounded-xl text-xs font-bold transition-all ${
+                        adjustType === t 
+                          ? 'bg-[#6dff8a] text-[#15170f]' 
+                          : 'bg-white/5 text-white/70 hover:text-white'
+                      }`}
+                    >
+                      {t}
+                    </button>
+                  ))}
+                </div>
+              </div>
+
+              <div className="space-y-1">
+                <label className="text-xs text-white/70 block">Amount ($USD)</label>
+                <div className="relative">
+                  <DollarSign className="w-4 h-4 text-[#6dff8a] absolute left-3 top-1/2 -translate-y-1/2" />
+                  <input
+                    type="number"
+                    required
+                    min="1"
+                    step="1"
+                    value={adjustAmount}
+                    onChange={(e) => setAdjustAmount(e.target.value)}
+                    className="w-full bg-black/50 border border-white/15 rounded-xl pl-9 pr-4 py-2.5 text-white font-mono font-bold text-sm focus:outline-none focus:border-[#6dff8a]"
+                  />
+                </div>
+              </div>
+
+              <div className="space-y-1">
+                <label className="text-xs text-white/70 block">Internal Audit Note &amp; Reason</label>
+                <input
+                  type="text"
+                  required
+                  value={adjustNote}
+                  onChange={(e) => setAdjustNote(e.target.value)}
+                  className="w-full bg-black/50 border border-white/15 rounded-xl px-3.5 py-2.5 text-xs text-white focus:outline-none focus:border-[#6dff8a]"
+                />
+              </div>
+
+              <button
+                type="submit"
+                className="w-full py-3 rounded-xl bg-[#6dff8a] hover:bg-[#5ce077] text-[#15170f] font-bold text-xs shadow-lg transition-all"
+              >
+                Execute {adjustType} of ${adjustAmount}
+              </button>
+            </form>
+          </div>
+        </div>
+      )}
+
+      {/* ========================================================= */}
+      {/* MODAL 3: KYC REJECTION / RESUBMIT REASON MODAL */}
+      {/* ========================================================= */}
+      {kycActionModal && (
+        <div className="fixed inset-0 z-60 flex items-center justify-center p-3 bg-black/80 backdrop-blur-md">
+          <div className="w-full max-w-md bg-[#181b11] border border-white/20 rounded-3xl p-6 shadow-2xl space-y-4 text-left">
+            <div className="flex items-center justify-between border-b border-white/10 pb-3">
+              <div>
+                <h3 className="text-base font-bold text-white">
+                  {kycActionModal.mode === 'reject' ? 'Decline KYC Verification' : 'Request Document Re-upload'}
+                </h3>
+                <p className="text-xs text-white/50">{kycActionModal.user.name}</p>
+              </div>
+              <button 
+                onClick={() => setKycActionModal(null)}
+                className="p-2 rounded-full bg-white/5 hover:bg-white/10 text-white/70 hover:text-white"
+              >
+                <X className="w-4 h-4" />
+              </button>
+            </div>
+
+            <form onSubmit={handleExecuteKycAction} className="space-y-4">
+              <div className="space-y-1">
+                <label className="text-xs text-white/70 block">Reason for Client</label>
+                <select
+                  value={kycReason}
+                  onChange={(e) => setKycReason(e.target.value)}
+                  className="w-full bg-black/50 border border-white/15 rounded-xl px-3.5 py-2.5 text-xs text-white focus:outline-none"
+                >
+                  <option value="Document expired or unreadable text">Document expired or unreadable text</option>
+                  <option value="Proof of address older than 90 days">Proof of address older than 90 days</option>
+                  <option value="Name spelling does not match legal bank records">Name spelling does not match legal bank records</option>
+                  <option value="Four corners of identity document cut off">Four corners of identity document cut off</option>
+                  <option value="High AML risk jurisdiction discrepancy">High AML risk jurisdiction discrepancy</option>
+                </select>
+              </div>
+
+              <button
+                type="submit"
+                className={`w-full py-3 rounded-xl font-bold text-xs transition-all ${
+                  kycActionModal.mode === 'reject'
+                    ? 'bg-red-500 hover:bg-red-600 text-white'
+                    : 'bg-yellow-400 hover:bg-yellow-500 text-black'
+                }`}
+              >
+                Confirm {kycActionModal.mode === 'reject' ? 'Rejection' : 'Resubmit Request'}
+              </button>
+            </form>
+          </div>
+        </div>
+      )}
+
     </div>
   );
 };

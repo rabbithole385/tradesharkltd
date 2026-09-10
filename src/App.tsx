@@ -27,9 +27,11 @@ import { AdminPortalModal } from './components/AdminPortalModal';
 
 import { Instrument, PopularInvestor } from './types';
 import { INSTRUMENTS } from './data/mockData';
-import { MessageSquare, ArrowUp, ArrowRight, ShieldCheck, Users } from 'lucide-react';
+import { MessageSquare, ArrowUp, ArrowRight, ShieldCheck, Users, AlertCircle, DollarSign } from 'lucide-react';
+import { useBrokerage } from './context/BrokerageContext';
 
 export default function App() {
+  const { currentUser, setCurrentUserId, transactions, users, createUser } = useBrokerage();
   const [isSearchOpen, setIsSearchOpen] = useState(false);
   const [isUserDashboardOpen, setIsUserDashboardOpen] = useState(false);
   const [isAdminPortalOpen, setIsAdminPortalOpen] = useState(false);
@@ -42,8 +44,10 @@ export default function App() {
   const [isAiChatOpen, setIsAiChatOpen] = useState(false);
   const [showScrollTop, setShowScrollTop] = useState(false);
   const [showMobileStickyCta, setShowMobileStickyCta] = useState(false);
-  const [currentUser, setCurrentUser] = useState<{ name: string; email: string } | null>(null);
   const [notification, setNotification] = useState<string | null>(null);
+
+  const pendingApprovalsCount = transactions.filter(t => t.status === 'Pending Approval').length +
+    users.filter(u => u.kycStatus === 'Pending' || u.kycStatus === 'Under Review').length;
 
   useEffect(() => {
     const handleScroll = () => {
@@ -60,9 +64,38 @@ export default function App() {
     setTradeInstrument(found);
   };
 
-  const handleUserAuthSuccess = (user: { name: string; email: string }) => {
-    setCurrentUser(user);
-    setNotification(`Signed in as ${user.name}`);
+  const handleUserAuthSuccess = (authUser: { name: string; email: string }) => {
+    const existing = users.find(u => u.email.toLowerCase() === authUser.email.toLowerCase());
+    if (existing) {
+      setCurrentUserId(existing.id);
+    } else {
+      const created = createUser({
+        name: authUser.name,
+        email: authUser.email,
+        phone: '+44 7700 900111',
+        country: 'United Kingdom',
+        tier: 'Tier 1 - Standard',
+        currency: 'USD',
+        realBalance: 5000,
+        virtualBalance: 100000,
+        kycStatus: 'Pending',
+        kycDocType: 'Passport',
+        kycDocNumber: 'GB-PENDING',
+        kycSubmittedDate: new Date().toISOString().substring(0, 10),
+        amlRisk: 'Low',
+        pepWatchlistHit: false,
+        status: 'Active',
+        role: 'Trader',
+        leverage: 30,
+        allowTrading: true,
+        allowShorting: true,
+        allowCrypto: true,
+        maxPositionLimit: 50000,
+        accountManager: 'David Sterling'
+      });
+      setCurrentUserId(created.id);
+    }
+    setNotification(`Signed in as ${authUser.name}`);
     setTimeout(() => setNotification(null), 3500);
   };
 
@@ -88,13 +121,37 @@ export default function App() {
 
       {/* Quick Environment Bar for testing Admin and User Functions */}
       <div className="bg-[#12140c] border-b border-white/10 px-4 py-2 text-xs flex flex-wrap items-center justify-between gap-2">
-        <div className="flex items-center gap-2 text-white/70">
-          <span className="w-2 h-2 rounded-full bg-[#6dff8a] animate-pulse" />
-          <span>TradeShark Ltd Portal Access:</span>
-          {currentUser ? (
-            <span className="text-white font-semibold">Active User: {currentUser.name}</span>
-          ) : (
-            <span className="text-white/50">Simulated Environment</span>
+        <div className="flex flex-wrap items-center gap-3 text-white/70">
+          <div className="flex items-center gap-2">
+            <span className="w-2 h-2 rounded-full bg-[#6dff8a] animate-pulse" />
+            <span>Active Trader:</span>
+            <strong className="text-white">{currentUser.name}</strong>
+          </div>
+          <span className="text-white/30 hidden sm:inline">|</span>
+          <div className="hidden sm:flex items-center gap-1.5">
+            <span className="text-white/50">Real Balance:</span>
+            <strong className="text-[#6dff8a] font-mono">
+              ${currentUser.realBalance.toLocaleString(undefined, { minimumFractionDigits: 2 })}
+            </strong>
+          </div>
+          <span className="text-white/30 hidden md:inline">|</span>
+          <div className="hidden md:flex items-center gap-1.5">
+            <span className="text-white/50">KYC:</span>
+            <span className={`px-1.5 py-0.2 rounded font-bold text-[10px] ${
+              currentUser.kycStatus === 'Approved' ? 'bg-[#6dff8a]/20 text-[#6dff8a]' : 'bg-yellow-400/20 text-yellow-400'
+            }`}>
+              {currentUser.kycStatus}
+            </span>
+          </div>
+
+          {pendingApprovalsCount > 0 && (
+            <button
+              onClick={() => setIsAdminPortalOpen(true)}
+              className="flex items-center gap-1 bg-yellow-400/15 hover:bg-yellow-400/25 border border-yellow-400/40 text-yellow-400 px-2 py-0.5 rounded-full font-bold text-[10px] transition-colors"
+            >
+              <AlertCircle className="w-3 h-3" />
+              <span>{pendingApprovalsCount} Approvals Queued</span>
+            </button>
           )}
         </div>
 
@@ -242,12 +299,20 @@ export default function App() {
         onClose={() => setIsUserDashboardOpen(false)}
         user={currentUser}
         onOpenTrade={handleOpenTradeForSymbol}
+        onOpenAdminPortal={() => {
+          setIsUserDashboardOpen(false);
+          setIsAdminPortalOpen(true);
+        }}
       />
 
       {/* Administrative Console */}
       <AdminPortalModal
         isOpen={isAdminPortalOpen}
         onClose={() => setIsAdminPortalOpen(false)}
+        onSwitchToUserDashboard={() => {
+          setIsAdminPortalOpen(false);
+          setIsUserDashboardOpen(true);
+        }}
       />
 
     </div>
