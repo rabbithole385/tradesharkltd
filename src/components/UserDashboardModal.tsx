@@ -23,7 +23,8 @@ import {
   FileText,
   Copy,
   Check,
-  ShieldAlert
+  ShieldAlert,
+  LogOut
 } from 'lucide-react';
 import { TradeSharkLogo } from './TradeSharkLogo';
 import { useBrokerage } from '../context/BrokerageContext';
@@ -31,6 +32,7 @@ import { FundingTransaction } from '../types';
 import { UserSidebar, UserTab } from './UserPortal/UserSidebar';
 import { UserKycTab } from './UserPortal/UserKycTab';
 import { UserInboxTab } from './UserPortal/UserInboxTab';
+import { UserLoginGate, UserSession } from './UserPortal/UserLoginGate';
 
 interface UserDashboardModalProps {
   isOpen: boolean;
@@ -50,6 +52,7 @@ export const UserDashboardModal: React.FC<UserDashboardModalProps> = ({
 
   const {
     currentUser,
+    setCurrentUserId,
     transactions,
     positions,
     emails,
@@ -57,6 +60,37 @@ export const UserDashboardModal: React.FC<UserDashboardModalProps> = ({
     submitDeposit,
     submitWithdrawal
   } = useBrokerage();
+
+  // Authentication & Session Guard: never log in automatically
+  const [userSession, setUserSession] = useState<UserSession | null>(() => {
+    try {
+      const tabStr = sessionStorage.getItem('tradeshark_user_session');
+      if (tabStr) {
+        const parsed = JSON.parse(tabStr);
+        if (Date.now() < parsed.expiresAt) {
+          return parsed;
+        }
+        sessionStorage.removeItem('tradeshark_user_session');
+      }
+      const localStr = localStorage.getItem('tradeshark_user_session');
+      if (localStr) {
+        const parsed = JSON.parse(localStr);
+        if (Date.now() < parsed.expiresAt) {
+          return parsed;
+        }
+        localStorage.removeItem('tradeshark_user_session');
+      }
+    } catch (e) {
+      console.error('Error reading user session', e);
+    }
+    return null;
+  });
+
+  const handleLogout = () => {
+    sessionStorage.removeItem('tradeshark_user_session');
+    localStorage.removeItem('tradeshark_user_session');
+    setUserSession(null);
+  };
 
   const [activeTab, setActiveTab] = useState<UserTab>('portfolio');
   const [accountType, setAccountType] = useState<'real' | 'virtual'>('real');
@@ -156,6 +190,21 @@ export const UserDashboardModal: React.FC<UserDashboardModalProps> = ({
     settings: { title: 'Account Settings & Compliance Profile', subtitle: 'Manage trading limits, leverage, and account tier' }
   };
 
+  // If user is not authenticated, show UserLoginGate
+  if (!userSession) {
+    return (
+      <div className="fixed inset-0 z-50 flex items-center justify-center p-3 sm:p-4 bg-black/90 backdrop-blur-md animate-fadeIn">
+        <UserLoginGate
+          onLoginSuccess={(session, user) => {
+            setUserSession(session);
+            setCurrentUserId(user.id);
+          }}
+          onClose={onClose}
+        />
+      </div>
+    );
+  }
+
   return (
     <div className="fixed inset-0 z-50 flex items-center justify-center p-1 sm:p-4 bg-black/90 backdrop-blur-md animate-fadeIn">
       <div 
@@ -172,6 +221,7 @@ export const UserDashboardModal: React.FC<UserDashboardModalProps> = ({
           positionsCount={userPositions.length}
           unreadEmailsCount={unreadEmailsCount}
           onOpenAdminPortal={onOpenAdminPortal}
+          onLogout={handleLogout}
           onClose={onClose}
         />
 
@@ -223,6 +273,16 @@ export const UserDashboardModal: React.FC<UserDashboardModalProps> = ({
                   <span>Admin Console</span>
                 </button>
               )}
+
+              {/* Sign Out Button */}
+              <button
+                onClick={handleLogout}
+                className="inline-flex items-center gap-1.5 px-3 py-1.5 rounded-xl bg-red-500/10 hover:bg-red-500/20 text-red-400 border border-red-500/25 text-xs font-semibold transition-colors"
+                title="Sign out of trading account"
+              >
+                <LogOut className="w-3.5 h-3.5" />
+                <span className="hidden sm:inline">Sign Out</span>
+              </button>
 
               <button
                 onClick={onClose}

@@ -1,6 +1,7 @@
 import React, { useState } from 'react';
-import { X, CheckCircle2, Lock, Mail, ArrowRight, ShieldCheck } from 'lucide-react';
+import { X, CheckCircle2, Lock, Mail, ArrowRight, ShieldCheck, AlertCircle, Eye, EyeOff } from 'lucide-react';
 import { TradeSharkLogo } from './TradeSharkLogo';
+import { useBrokerage } from '../context/BrokerageContext';
 
 interface AuthModalProps {
   isOpen: boolean;
@@ -17,23 +18,134 @@ export const AuthModal: React.FC<AuthModalProps> = ({
 }) => {
   if (!isOpen) return null;
 
+  const { users, createUser, setCurrentUserId } = useBrokerage();
+
   const [mode, setMode] = useState<'login' | 'signup'>(initialMode);
   const [email, setEmail] = useState('');
   const [password, setPassword] = useState('');
+  const [showPassword, setShowPassword] = useState(false);
   const [fullName, setFullName] = useState('');
+  const [rememberMe, setRememberMe] = useState(false);
   const [agreed, setAgreed] = useState(true);
   const [submitted, setSubmitted] = useState(false);
+  const [errorMessage, setErrorMessage] = useState<string | null>(null);
+  const [isLoading, setIsLoading] = useState(false);
 
   const handleSubmit = (e: React.FormEvent) => {
     e.preventDefault();
-    setSubmitted(true);
+    setErrorMessage(null);
+    setIsLoading(true);
+
     setTimeout(() => {
-      onSuccess({
-        name: fullName || 'Valued Trader',
-        email: email || 'trader@tradeshark.com'
-      });
-      onClose();
-    }, 1200);
+      const searchEmail = email.trim().toLowerCase();
+
+      if (mode === 'login') {
+        // Look up in data system
+        const foundUser = users.find(u => 
+          u.email.toLowerCase() === searchEmail || 
+          u.name.toLowerCase() === searchEmail ||
+          u.id.toLowerCase() === searchEmail
+        );
+
+        if (!foundUser) {
+          setIsLoading(false);
+          setErrorMessage('Account details not found in the TradeShark data system. Please check your email or create a trading account.');
+          return;
+        }
+
+        if (foundUser.password && foundUser.password !== password) {
+          setIsLoading(false);
+          setErrorMessage('Incorrect password. Please verify your credentials and try again.');
+          return;
+        }
+
+        if (foundUser.status === 'Suspended') {
+          setIsLoading(false);
+          setErrorMessage('This account is currently suspended by compliance.');
+          return;
+        }
+
+        const now = Date.now();
+        const expiresAt = rememberMe ? now + 24 * 60 * 60 * 1000 : now + 8 * 60 * 60 * 1000;
+        const session = {
+          userId: foundUser.id,
+          name: foundUser.name,
+          email: foundUser.email,
+          loginTime: now,
+          expiresAt,
+          sessionType: rememberMe ? '24h' : 'tab'
+        };
+
+        if (rememberMe) {
+          localStorage.setItem('tradeshark_user_session', JSON.stringify(session));
+          sessionStorage.removeItem('tradeshark_user_session');
+        } else {
+          sessionStorage.setItem('tradeshark_user_session', JSON.stringify(session));
+          localStorage.removeItem('tradeshark_user_session');
+        }
+
+        setCurrentUserId(foundUser.id);
+        setIsLoading(false);
+        setSubmitted(true);
+        setTimeout(() => {
+          onSuccess({ name: foundUser.name, email: foundUser.email });
+          onClose();
+        }, 600);
+
+      } else {
+        // Sign up
+        if (users.some(u => u.email.toLowerCase() === searchEmail)) {
+          setIsLoading(false);
+          setErrorMessage('An account with this email address already exists. Please log in instead.');
+          return;
+        }
+
+        const newUser = createUser({
+          name: fullName.trim() || 'New Trader',
+          email: searchEmail,
+          password,
+          phone: '+44 20 7946 0912',
+          country: 'United Kingdom',
+          tier: 'Tier 1 - Standard',
+          currency: 'USD',
+          realBalance: 5000,
+          virtualBalance: 100000,
+          kycStatus: 'Pending',
+          kycDocType: 'Passport',
+          kycDocNumber: `REG-${Math.floor(100000 + Math.random() * 900000)}`,
+          kycSubmittedDate: new Date().toISOString().substring(0, 16).replace('T', ' '),
+          amlRisk: 'Low',
+          pepWatchlistHit: false,
+          status: 'Active',
+          role: 'Trader',
+          leverage: 30,
+          allowTrading: true,
+          allowShorting: false,
+          allowCrypto: true,
+          maxPositionLimit: 50000,
+          accountManager: 'David Sterling'
+        });
+
+        const now = Date.now();
+        const session = {
+          userId: newUser.id,
+          name: newUser.name,
+          email: newUser.email,
+          loginTime: now,
+          expiresAt: now + 24 * 60 * 60 * 1000,
+          sessionType: '24h'
+        };
+
+        localStorage.setItem('tradeshark_user_session', JSON.stringify(session));
+        setCurrentUserId(newUser.id);
+        setIsLoading(false);
+        setSubmitted(true);
+        setTimeout(() => {
+          onSuccess({ name: newUser.name, email: newUser.email });
+          onClose();
+        }, 600);
+      }
+    }, 400);
   };
 
   return (
@@ -124,61 +236,41 @@ export const AuthModal: React.FC<AuthModalProps> = ({
                 </p>
               </div>
 
-              {/* Quick Demo Social buttons */}
-              <div className="space-y-2">
-                <button
-                  type="button"
-                  onClick={() => {
-                    setEmail('alex.m@gmail.com');
-                    setFullName('Alex Mercer');
-                    setSubmitted(true);
-                    setTimeout(() => {
-                      onSuccess({ name: 'Alex Mercer', email: 'alex.m@gmail.com' });
-                      onClose();
-                    }, 1000);
-                  }}
-                  className="w-full py-2.5 px-4 rounded-xl bg-white/5 hover:bg-white/10 border border-white/10 text-xs font-semibold text-white flex items-center justify-between transition-colors group"
-                >
-                  <div className="flex items-center gap-2">
-                    <span className="w-2 h-2 rounded-full bg-[#6dff8a]" />
-                    <span>Continue as Verified Trader (Alex Mercer)</span>
-                  </div>
-                  <span className="text-[10px] bg-[#6dff8a]/20 text-[#6dff8a] px-2 py-0.5 rounded font-mono font-bold">$104k Live</span>
-                </button>
-              </div>
-
-              <div className="flex items-center gap-3">
-                <div className="h-px flex-1 bg-white/10" />
-                <span className="text-[10px] text-white/40 uppercase font-semibold">Or with credentials</span>
-                <div className="h-px flex-1 bg-white/10" />
-              </div>
+              {/* Error Message */}
+              {errorMessage && (
+                <div className="p-3 rounded-xl bg-red-500/15 border border-red-500/30 text-red-400 text-xs flex items-start gap-2.5 animate-fadeIn">
+                  <AlertCircle className="w-4 h-4 shrink-0 mt-0.5" />
+                  <span>{errorMessage}</span>
+                </div>
+              )}
 
               {/* Form */}
               <form onSubmit={handleSubmit} className="space-y-3.5">
                 {mode === 'signup' && (
                   <div className="space-y-1">
-                    <label className="text-xs text-white/70">Full Name</label>
+                    <label className="text-xs text-white/70">Full Legal Name</label>
                     <input
                       type="text"
                       required
                       value={fullName}
                       onChange={(e) => setFullName(e.target.value)}
-                      placeholder="e.g. Jordan Smith"
                       className="w-full bg-black/40 border border-white/10 rounded-xl px-3.5 py-2.5 text-xs text-white focus:outline-none focus:border-[#6dff8a]"
                     />
                   </div>
                 )}
 
                 <div className="space-y-1">
-                  <label className="text-xs text-white/70">Email Address</label>
+                  <label className="text-xs text-white/70">
+                    {mode === 'signup' ? 'Email Address' : 'Email Address or Client ID'}
+                  </label>
                   <div className="relative">
                     <Mail className="w-4 h-4 text-white/40 absolute left-3 top-1/2 -translate-y-1/2" />
                     <input
-                      type="email"
+                      type="text"
                       required
+                      autoComplete="username"
                       value={email}
                       onChange={(e) => setEmail(e.target.value)}
-                      placeholder="you@domain.com"
                       className="w-full bg-black/40 border border-white/10 rounded-xl pl-9 pr-4 py-2.5 text-xs text-white focus:outline-none focus:border-[#6dff8a]"
                     />
                   </div>
@@ -189,15 +281,34 @@ export const AuthModal: React.FC<AuthModalProps> = ({
                   <div className="relative">
                     <Lock className="w-4 h-4 text-white/40 absolute left-3 top-1/2 -translate-y-1/2" />
                     <input
-                      type="password"
+                      type={showPassword ? 'text' : 'password'}
                       required
+                      autoComplete={mode === 'signup' ? 'new-password' : 'current-password'}
                       value={password}
                       onChange={(e) => setPassword(e.target.value)}
-                      placeholder="••••••••••••"
-                      className="w-full bg-black/40 border border-white/10 rounded-xl pl-9 pr-4 py-2.5 text-xs text-white focus:outline-none focus:border-[#6dff8a]"
+                      className="w-full bg-black/40 border border-white/10 rounded-xl pl-9 pr-9 py-2.5 text-xs text-white focus:outline-none focus:border-[#6dff8a]"
                     />
+                    <button
+                      type="button"
+                      onClick={() => setShowPassword(!showPassword)}
+                      className="absolute right-2.5 top-1/2 -translate-y-1/2 text-white/40 hover:text-white transition-colors p-1"
+                    >
+                      {showPassword ? <EyeOff className="w-3.5 h-3.5" /> : <Eye className="w-3.5 h-3.5" />}
+                    </button>
                   </div>
                 </div>
+
+                {mode === 'login' && (
+                  <label className="flex items-center gap-2 text-xs text-white/60 hover:text-white/80 cursor-pointer pt-0.5 select-none">
+                    <input
+                      type="checkbox"
+                      checked={rememberMe}
+                      onChange={(e) => setRememberMe(e.target.checked)}
+                      className="rounded bg-black/40 border-white/20 text-[#6dff8a] focus:ring-0 cursor-pointer"
+                    />
+                    <span>Remember session (24h)</span>
+                  </label>
+                )}
 
                 {mode === 'signup' && (
                   <label className="flex items-start gap-2 text-[11px] text-[#a3a89e] cursor-pointer pt-0.5">
@@ -216,10 +327,17 @@ export const AuthModal: React.FC<AuthModalProps> = ({
 
                 <button
                   type="submit"
-                  className="w-full py-3 rounded-xl bg-[#6dff8a] hover:bg-[#5ce077] text-[#15170f] font-bold text-xs flex items-center justify-center gap-2 shadow-[0_0_20px_rgba(109,255,138,0.2)] transition-all cursor-pointer"
+                  disabled={isLoading}
+                  className="w-full py-3 rounded-xl bg-[#6dff8a] hover:bg-[#5ce077] text-[#15170f] font-bold text-xs flex items-center justify-center gap-2 shadow-[0_0_20px_rgba(109,255,138,0.2)] transition-all cursor-pointer disabled:opacity-50"
                 >
-                  <span>{mode === 'signup' ? 'Create Account' : 'Log In to Account'}</span>
-                  <ArrowRight className="w-4 h-4" />
+                  {isLoading ? (
+                    <div className="w-4 h-4 border-2 border-black border-t-transparent rounded-full animate-spin" />
+                  ) : (
+                    <>
+                      <span>{mode === 'signup' ? 'Create Account' : 'Log In to Account'}</span>
+                      <ArrowRight className="w-4 h-4" />
+                    </>
+                  )}
                 </button>
               </form>
 

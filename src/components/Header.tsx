@@ -33,6 +33,7 @@ export const Header: React.FC<HeaderProps> = ({
   const [mobileMenuOpen, setMobileMenuOpen] = useState(false);
   const [selectedLang, setSelectedLang] = useState('EN');
   const [langMenuOpen, setLangMenuOpen] = useState(false);
+  const [hasUserSession, setHasUserSession] = useState(false);
 
   useEffect(() => {
     const handleScroll = () => {
@@ -41,6 +42,31 @@ export const Header: React.FC<HeaderProps> = ({
     window.addEventListener('scroll', handleScroll);
     return () => window.removeEventListener('scroll', handleScroll);
   }, []);
+
+  useEffect(() => {
+    const checkSession = () => {
+      try {
+        const tab = sessionStorage.getItem('tradeshark_user_session');
+        const local = localStorage.getItem('tradeshark_user_session');
+        const active = tab || local;
+        if (active) {
+          const parsed = JSON.parse(active);
+          if (Date.now() < parsed.expiresAt) {
+            setHasUserSession(true);
+            return;
+          }
+        }
+      } catch (e) {}
+      setHasUserSession(false);
+    };
+    checkSession();
+    window.addEventListener('storage', checkSession);
+    const interval = setInterval(checkSession, 1500);
+    return () => {
+      window.removeEventListener('storage', checkSession);
+      clearInterval(interval);
+    };
+  }, [currentUser]);
 
   const languages = ['EN', 'ES', 'DE', 'FR', 'IT', 'NL', 'PT', 'AR'];
 
@@ -287,10 +313,10 @@ export const Header: React.FC<HeaderProps> = ({
           <div className="h-5 w-px bg-white/15 hidden sm:block"></div>
 
           {/* Log In Button / User Avatar Button */}
-          {currentUser ? (
+          {hasUserSession && currentUser ? (
             <button
               onClick={onOpenUserDashboard}
-              className="flex items-center gap-2 px-3 py-1.5 rounded-full bg-white/10 hover:bg-white/15 border border-[#6dff8a]/40 text-xs font-semibold text-white transition-colors"
+              className="flex items-center gap-2 px-3 py-1.5 rounded-full bg-white/10 hover:bg-white/15 border border-[#6dff8a]/40 text-xs font-semibold text-white transition-colors cursor-pointer"
             >
               <span className="w-6 h-6 rounded-full bg-[#6dff8a] text-[#15170f] font-bold flex items-center justify-center text-[10px]">
                 {currentUser.name.slice(0, 1).toUpperCase()}
@@ -301,7 +327,7 @@ export const Header: React.FC<HeaderProps> = ({
             <button 
               id="header-login-btn"
               onClick={() => onOpenAuth('login')}
-              className="hidden sm:inline-flex items-center px-4 py-2 text-sm font-semibold text-white hover:text-[#6dff8a] bg-transparent border border-white/20 hover:border-[#6dff8a]/50 rounded-full transition-all"
+              className="hidden sm:inline-flex items-center px-4 py-2 text-sm font-semibold text-white hover:text-[#6dff8a] bg-transparent border border-white/20 hover:border-[#6dff8a]/50 rounded-full transition-all cursor-pointer"
             >
               Log in
             </button>

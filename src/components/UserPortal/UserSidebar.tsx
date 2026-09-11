@@ -16,7 +16,8 @@ import {
   ShieldAlert, 
   Eye, 
   Building2,
-  Lock
+  Lock,
+  LogOut
 } from 'lucide-react';
 import { TradeSharkLogo } from '../TradeSharkLogo';
 import { UserAccount } from '../../types';
@@ -42,6 +43,7 @@ interface UserSidebarProps {
   positionsCount: number;
   unreadEmailsCount: number;
   onOpenAdminPortal?: () => void;
+  onLogout?: () => void;
   onClose: () => void;
 }
 
@@ -54,6 +56,7 @@ export const UserSidebar: React.FC<UserSidebarProps> = ({
   positionsCount,
   unreadEmailsCount,
   onOpenAdminPortal,
+  onLogout,
   onClose
 }) => {
   const [copiedLink, setCopiedLink] = useState(false);
@@ -277,6 +280,20 @@ export const UserSidebar: React.FC<UserSidebarProps> = ({
               <span className="font-semibold text-[11px]">Admin Console</span>
             </div>
             <span className="text-[10px] font-mono text-white/40">/#admin</span>
+          </button>
+        )}
+
+        {onLogout && (
+          <button
+            onClick={onLogout}
+            className="w-full flex items-center justify-between px-3 py-2 rounded-xl bg-red-500/10 hover:bg-red-500/20 text-red-400 border border-red-500/25 transition-colors"
+            title="Sign out of trading account"
+          >
+            <div className="flex items-center gap-2">
+              <LogOut className="w-3.5 h-3.5" />
+              <span className="font-semibold text-[11px]">Sign Out</span>
+            </div>
+            <span className="text-[10px] text-red-400/60 font-mono">End Session</span>
           </button>
         )}
 
