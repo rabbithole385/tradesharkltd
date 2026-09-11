@@ -34,7 +34,9 @@ import {
   Mail,
   Zap,
   Server,
-  Sparkles
+  Sparkles,
+  LogOut,
+  Clock
 } from 'lucide-react';
 import { TradeSharkLogo } from './TradeSharkLogo';
 import { useBrokerage } from '../context/BrokerageContext';
@@ -42,6 +44,7 @@ import { UserAccount, UserTier, AccountStatus, FundingTransaction } from '../typ
 import { AdminSidebar, AdminTab } from './AdminPortal/AdminSidebar';
 import { AdminEmailsTab } from './AdminPortal/AdminEmailsTab';
 import { AdminKycInspectorModal } from './AdminPortal/AdminKycInspectorModal';
+import { AdminLoginGate, AdminSession } from './AdminPortal/AdminLoginGate';
 
 interface AdminPortalModalProps {
   isOpen: boolean;
@@ -83,6 +86,57 @@ export const AdminPortalModal: React.FC<AdminPortalModalProps> = ({
   const [searchTerm, setSearchTerm] = useState('');
   const [statusFilter, setStatusFilter] = useState<'ALL' | AccountStatus>('ALL');
   const [copiedLink, setCopiedLink] = useState(false);
+
+  // Admin Authentication & Session Management
+  const [adminSession, setAdminSession] = useState<AdminSession | null>(() => {
+    try {
+      // 1. Check single-tab browser session
+      const tabStr = sessionStorage.getItem('tradeshark_admin_session');
+      if (tabStr) {
+        const parsed = JSON.parse(tabStr) as AdminSession;
+        if (Date.now() < parsed.expiresAt) {
+          return parsed;
+        } else {
+          sessionStorage.removeItem('tradeshark_admin_session');
+        }
+      }
+      // 2. Check persistent session
+      const localStr = localStorage.getItem('tradeshark_admin_session');
+      if (localStr) {
+        const parsed = JSON.parse(localStr) as AdminSession;
+        if (Date.now() < parsed.expiresAt) {
+          return parsed;
+        } else {
+          localStorage.removeItem('tradeshark_admin_session');
+        }
+      }
+    } catch (e) {
+      console.error('Error reading admin session from storage', e);
+    }
+    return null;
+  });
+
+  const [sessionExpiredNotice, setSessionExpiredNotice] = useState(false);
+
+  // Periodic expiration watcher
+  React.useEffect(() => {
+    if (!adminSession) return;
+    const interval = setInterval(() => {
+      if (Date.now() >= adminSession.expiresAt) {
+        handleLogout(true);
+      }
+    }, 5000);
+    return () => clearInterval(interval);
+  }, [adminSession]);
+
+  const handleLogout = (wasExpired = false) => {
+    sessionStorage.removeItem('tradeshark_admin_session');
+    localStorage.removeItem('tradeshark_admin_session');
+    setAdminSession(null);
+    if (wasExpired) {
+      setSessionExpiredNotice(true);
+    }
+  };
 
   // Selected User for Deep Account Control
   const [inspectingUser, setInspectingUser] = useState<UserAccount | null>(null);
@@ -245,6 +299,28 @@ export const AdminPortalModal: React.FC<AdminPortalModalProps> = ({
     audit: { title: 'Regulatory Compliance Audit Trail', subtitle: 'Immutable administrative logs with millisecond timestamps' }
   };
 
+  if (!adminSession) {
+    return (
+      <div 
+        className="fixed inset-0 z-50 flex items-center justify-center p-3 sm:p-4 bg-black/90 backdrop-blur-md animate-fadeIn"
+        onClick={onClose}
+      >
+        <div onClick={(e) => e.stopPropagation()}>
+          <AdminLoginGate
+            onLoginSuccess={(newSession) => {
+              setAdminSession(newSession);
+              setSessionExpiredNotice(false);
+              setNotification(`Authenticated as ${newSession.name} (${newSession.role})`);
+              setTimeout(() => setNotification(null), 4000);
+            }}
+            onClose={onClose}
+            sessionExpiredNotice={sessionExpiredNotice}
+          />
+        </div>
+      </div>
+    );
+  }
+
   return (
     <div className="fixed inset-0 z-50 flex items-center justify-center p-1 sm:p-4 bg-black/90 backdrop-blur-md animate-fadeIn">
       <div 
@@ -259,6 +335,8 @@ export const AdminPortalModal: React.FC<AdminPortalModalProps> = ({
           pendingFundingCount={pendingFundingCount}
           unreadInquiriesCount={unreadInquiriesCount}
           usersCount={users.length}
+          adminSession={adminSession}
+          onLogout={() => handleLogout(false)}
           onSwitchToUserPortal={onSwitchToUserDashboard}
           onClose={onClose}
         />
@@ -290,6 +368,16 @@ export const AdminPortalModal: React.FC<AdminPortalModalProps> = ({
             </div>
 
             <div className="flex items-center gap-2 sm:gap-3">
+              {/* Operator Badge */}
+              <div className="hidden lg:flex items-center gap-2 px-3 py-1.5 rounded-xl bg-white/5 border border-white/10 text-xs">
+                <span className="w-2 h-2 rounded-full bg-[#6dff8a] animate-pulse" />
+                <span className="text-white/60">Operator:</span>
+                <strong className="text-white font-medium">{adminSession.name}</strong>
+                <span className="text-[10px] font-mono text-[#6dff8a] bg-[#6dff8a]/15 px-1.5 py-0.5 rounded">
+                  @{adminSession.username}
+                </span>
+              </div>
+
               {/* Copy URL Button */}
               <button
                 onClick={handleCopyLink}
@@ -328,6 +416,16 @@ export const AdminPortalModal: React.FC<AdminPortalModalProps> = ({
               >
                 <UserPlus className="w-3.5 h-3.5" />
                 <span>+ Setup User</span>
+              </button>
+
+              {/* Sign Out / Lock Button */}
+              <button
+                onClick={() => handleLogout(false)}
+                className="inline-flex items-center gap-1.5 px-3 py-1.5 rounded-xl bg-red-500/15 hover:bg-red-500/25 text-red-400 border border-red-500/30 text-xs font-semibold transition-colors"
+                title="Sign out & lock administrative terminal"
+              >
+                <LogOut className="w-3.5 h-3.5" />
+                <span className="hidden sm:inline">Sign Out</span>
               </button>
 
               <button

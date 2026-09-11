@@ -16,6 +16,7 @@ import {
   LogOut
 } from 'lucide-react';
 import { TradeSharkLogo } from '../TradeSharkLogo';
+import { AdminSession } from './AdminLoginGate';
 
 export type AdminTab = 'overview' | 'users' | 'setup' | 'kyc' | 'funding' | 'emails' | 'markets' | 'audit';
 
@@ -26,6 +27,8 @@ interface AdminSidebarProps {
   pendingFundingCount: number;
   unreadInquiriesCount: number;
   usersCount: number;
+  adminSession?: AdminSession | null;
+  onLogout?: () => void;
   onSwitchToUserPortal?: () => void;
   onClose: () => void;
 }
@@ -37,6 +40,8 @@ export const AdminSidebar: React.FC<AdminSidebarProps> = ({
   pendingFundingCount,
   unreadInquiriesCount,
   usersCount,
+  adminSession,
+  onLogout,
   onSwitchToUserPortal,
   onClose
 }) => {
@@ -194,6 +199,35 @@ export const AdminSidebar: React.FC<AdminSidebarProps> = ({
           </div>
         ))}
       </nav>
+
+      {/* Active Session & Operator Status */}
+      {adminSession && (
+        <div className="mx-3 mb-2 p-2.5 rounded-xl bg-white/[0.03] border border-white/10 text-xs">
+          <div className="flex items-center justify-between mb-1.5">
+            <div className="flex items-center gap-1.5 text-[11px] font-bold text-white">
+              <span className="w-2 h-2 rounded-full bg-[#6dff8a] animate-pulse" />
+              <span className="truncate">{adminSession.name}</span>
+            </div>
+            <span className="text-[9px] font-mono text-white/50 bg-white/5 px-1 rounded">
+              @{adminSession.username}
+            </span>
+          </div>
+          <div className="text-[10px] text-white/60 mb-2 flex items-center justify-between">
+            <span className="truncate">{adminSession.role}</span>
+          </div>
+
+          {onLogout && (
+            <button
+              onClick={onLogout}
+              className="w-full flex items-center justify-center gap-1.5 py-1.5 rounded-lg bg-red-500/15 hover:bg-red-500/25 text-red-400 border border-red-500/30 text-[11px] font-semibold transition-colors"
+              title="Terminate administrative session and lock console"
+            >
+              <LogOut className="w-3.5 h-3.5" />
+              <span>Sign Out / Lock Console</span>
+            </button>
+          )}
+        </div>
+      )}
 
       {/* Bottom Switcher & Return Links */}
       <div className="p-3 border-t border-white/10 bg-[#10120a] space-y-1.5 text-xs">
