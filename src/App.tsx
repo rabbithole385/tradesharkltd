@@ -153,6 +153,7 @@ export default function App() {
     }
     setNotification(`Signed in as ${authUser.name}`);
     setTimeout(() => setNotification(null), 3500);
+    setIsUserDashboardOpen(true);
   };
 
   return (
