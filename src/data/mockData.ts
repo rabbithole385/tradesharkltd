@@ -509,10 +509,9 @@ export const FOOTER_NAV_COLUMNS = [
   {
     title: 'PLATFORM',
     links: [
-      { name: 'User Dashboard (Portal)', href: '#user-portal' },
-      { name: 'Admin Console (Internal)', href: '#admin-portal' },
+      { name: 'TradeShark WebTrader', href: '#webtrader' },
       { name: 'CopyTrader™', href: '#copytrader' },
-      { name: '$100K Demo Account', href: '#demo' },
+      { name: '$100K Practice Account', href: '#demo' },
       { name: 'Smart Portfolios', href: '#portfolios' },
       { name: 'Fee Schedule', href: '#fees' },
       { name: 'Shark AI Assistant', href: '#shark-ai' }
@@ -522,7 +521,7 @@ export const FOOTER_NAV_COLUMNS = [
     title: 'SUPPORT',
     links: [
       { name: 'Help Center', href: '#help' },
-      { name: 'KYC Verification', href: '#kyc' },
+      { name: 'Verification & Safety', href: '#safety' },
       { name: 'How to Deposit', href: '#deposit' },
       { name: 'Open an Account', href: '#open-account' },
       { name: 'Risk Disclosures', href: '#risk' },

@@ -27,7 +27,7 @@ import { AdminPortalModal } from './components/AdminPortalModal';
 
 import { Instrument, PopularInvestor } from './types';
 import { INSTRUMENTS } from './data/mockData';
-import { MessageSquare, ArrowUp, ArrowRight, ShieldCheck, Users, AlertCircle, DollarSign } from 'lucide-react';
+import { MessageSquare, ArrowUp, ArrowRight } from 'lucide-react';
 import { useBrokerage } from './context/BrokerageContext';
 
 export default function App() {
@@ -46,8 +46,64 @@ export default function App() {
   const [showMobileStickyCta, setShowMobileStickyCta] = useState(false);
   const [notification, setNotification] = useState<string | null>(null);
 
-  const pendingApprovalsCount = transactions.filter(t => t.status === 'Pending Approval').length +
-    users.filter(u => u.kycStatus === 'Pending' || u.kycStatus === 'Under Review').length;
+  // Sync state with URL hash & path for separate shareable links (#admin, /admin, #user, /user)
+  useEffect(() => {
+    const handleRouteSync = () => {
+      const hash = window.location.hash.toLowerCase();
+      const path = window.location.pathname.toLowerCase();
+      if (hash.startsWith('#admin') || path.startsWith('/admin')) {
+        setIsAdminPortalOpen(true);
+        setIsUserDashboardOpen(false);
+      } else if (
+        hash.startsWith('#user') || 
+        hash.startsWith('#dashboard') || 
+        path.startsWith('/user') || 
+        path.startsWith('/dashboard')
+      ) {
+        setIsUserDashboardOpen(true);
+        setIsAdminPortalOpen(false);
+      }
+    };
+
+    handleRouteSync();
+    window.addEventListener('hashchange', handleRouteSync);
+    window.addEventListener('popstate', handleRouteSync);
+    return () => {
+      window.removeEventListener('hashchange', handleRouteSync);
+      window.removeEventListener('popstate', handleRouteSync);
+    };
+  }, []);
+
+  const handleOpenUserDashboard = () => {
+    window.location.hash = 'user';
+    setIsUserDashboardOpen(true);
+    setIsAdminPortalOpen(false);
+  };
+
+  const handleOpenAdminPortal = () => {
+    window.location.hash = 'admin';
+    setIsAdminPortalOpen(true);
+    setIsUserDashboardOpen(false);
+  };
+
+  const handleCloseUserDashboard = () => {
+    setIsUserDashboardOpen(false);
+    if (
+      window.location.hash.includes('user') || 
+      window.location.hash.includes('dashboard') ||
+      window.location.pathname.includes('/user') ||
+      window.location.pathname.includes('/dashboard')
+    ) {
+      history.replaceState(null, '', '/');
+    }
+  };
+
+  const handleCloseAdminPortal = () => {
+    setIsAdminPortalOpen(false);
+    if (window.location.hash.includes('admin') || window.location.pathname.includes('/admin')) {
+      history.replaceState(null, '', '/');
+    }
+  };
 
   useEffect(() => {
     const handleScroll = () => {
@@ -114,65 +170,9 @@ export default function App() {
       <Header
         onOpenSearch={() => setIsSearchOpen(true)}
         onOpenAuth={(mode) => setAuthModal({ isOpen: true, mode })}
-        onOpenUserDashboard={() => setIsUserDashboardOpen(true)}
-        onOpenAdminPortal={() => setIsAdminPortalOpen(true)}
+        onOpenUserDashboard={handleOpenUserDashboard}
         currentUser={currentUser}
       />
-
-      {/* Quick Environment Bar for testing Admin and User Functions */}
-      <div className="bg-[#12140c] border-b border-white/10 px-4 py-2 text-xs flex flex-wrap items-center justify-between gap-2">
-        <div className="flex flex-wrap items-center gap-3 text-white/70">
-          <div className="flex items-center gap-2">
-            <span className="w-2 h-2 rounded-full bg-[#6dff8a] animate-pulse" />
-            <span>Active Trader:</span>
-            <strong className="text-white">{currentUser.name}</strong>
-          </div>
-          <span className="text-white/30 hidden sm:inline">|</span>
-          <div className="hidden sm:flex items-center gap-1.5">
-            <span className="text-white/50">Real Balance:</span>
-            <strong className="text-[#6dff8a] font-mono">
-              ${currentUser.realBalance.toLocaleString(undefined, { minimumFractionDigits: 2 })}
-            </strong>
-          </div>
-          <span className="text-white/30 hidden md:inline">|</span>
-          <div className="hidden md:flex items-center gap-1.5">
-            <span className="text-white/50">KYC:</span>
-            <span className={`px-1.5 py-0.2 rounded font-bold text-[10px] ${
-              currentUser.kycStatus === 'Approved' ? 'bg-[#6dff8a]/20 text-[#6dff8a]' : 'bg-yellow-400/20 text-yellow-400'
-            }`}>
-              {currentUser.kycStatus}
-            </span>
-          </div>
-
-          {pendingApprovalsCount > 0 && (
-            <button
-              onClick={() => setIsAdminPortalOpen(true)}
-              className="flex items-center gap-1 bg-yellow-400/15 hover:bg-yellow-400/25 border border-yellow-400/40 text-yellow-400 px-2 py-0.5 rounded-full font-bold text-[10px] transition-colors"
-            >
-              <AlertCircle className="w-3 h-3" />
-              <span>{pendingApprovalsCount} Approvals Queued</span>
-            </button>
-          )}
-        </div>
-
-        <div className="flex items-center gap-2">
-          <button
-            onClick={() => setIsUserDashboardOpen(true)}
-            className="flex items-center gap-1.5 px-3 py-1 rounded-lg bg-white/5 hover:bg-[#6dff8a]/20 text-white hover:text-[#6dff8a] border border-white/10 text-xs font-semibold transition-colors"
-          >
-            <Users className="w-3.5 h-3.5 text-[#6dff8a]" />
-            <span>Open User Portal</span>
-          </button>
-
-          <button
-            onClick={() => setIsAdminPortalOpen(true)}
-            className="flex items-center gap-1.5 px-3 py-1 rounded-lg bg-white/5 hover:bg-yellow-400/20 text-white hover:text-yellow-400 border border-white/10 text-xs font-semibold transition-colors"
-          >
-            <ShieldCheck className="w-3.5 h-3.5 text-yellow-400" />
-            <span>Open Admin Console</span>
-          </button>
-        </div>
-      </div>
 
       {/* Main Page Sections */}
       <main className="flex-1">
@@ -220,10 +220,7 @@ export default function App() {
       </main>
 
       {/* Footer */}
-      <Footer 
-        onOpenUserDashboard={() => setIsUserDashboardOpen(true)}
-        onOpenAdminPortal={() => setIsAdminPortalOpen(true)}
-      />
+      <Footer />
 
       {/* Floating AI Assistant Trigger Button */}
       <div className="fixed bottom-6 right-6 z-40 flex flex-col gap-3">
@@ -296,23 +293,17 @@ export default function App() {
       {/* User Dashboard & Client Portal */}
       <UserDashboardModal
         isOpen={isUserDashboardOpen}
-        onClose={() => setIsUserDashboardOpen(false)}
+        onClose={handleCloseUserDashboard}
         user={currentUser}
         onOpenTrade={handleOpenTradeForSymbol}
-        onOpenAdminPortal={() => {
-          setIsUserDashboardOpen(false);
-          setIsAdminPortalOpen(true);
-        }}
+        onOpenAdminPortal={handleOpenAdminPortal}
       />
 
       {/* Administrative Console */}
       <AdminPortalModal
         isOpen={isAdminPortalOpen}
-        onClose={() => setIsAdminPortalOpen(false)}
-        onSwitchToUserDashboard={() => {
-          setIsAdminPortalOpen(false);
-          setIsUserDashboardOpen(true);
-        }}
+        onClose={handleCloseAdminPortal}
+        onSwitchToUserDashboard={handleOpenUserDashboard}
       />
 
     </div>

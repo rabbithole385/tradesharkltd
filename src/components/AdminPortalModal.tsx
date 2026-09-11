@@ -29,11 +29,19 @@ import {
   TrendingUp,
   CreditCard,
   Building,
-  Key
+  Key,
+  Copy,
+  Mail,
+  Zap,
+  Server,
+  Sparkles
 } from 'lucide-react';
 import { TradeSharkLogo } from './TradeSharkLogo';
 import { useBrokerage } from '../context/BrokerageContext';
 import { UserAccount, UserTier, AccountStatus, FundingTransaction } from '../types';
+import { AdminSidebar, AdminTab } from './AdminPortal/AdminSidebar';
+import { AdminEmailsTab } from './AdminPortal/AdminEmailsTab';
+import { AdminKycInspectorModal } from './AdminPortal/AdminKycInspectorModal';
 
 interface AdminPortalModalProps {
   isOpen: boolean;
@@ -54,6 +62,7 @@ export const AdminPortalModal: React.FC<AdminPortalModalProps> = ({
     setCurrentUserId,
     transactions,
     auditLogs,
+    emails,
     createUser,
     updateUser,
     setUserStatus,
@@ -69,13 +78,17 @@ export const AdminPortalModal: React.FC<AdminPortalModalProps> = ({
     manualBalanceAdjustment
   } = useBrokerage();
 
-  const [activeTab, setActiveTab] = useState<'users' | 'setup' | 'kyc' | 'funding' | 'markets' | 'audit'>('users');
+  const [activeTab, setActiveTab] = useState<AdminTab>('overview');
   const [notification, setNotification] = useState<string | null>(null);
   const [searchTerm, setSearchTerm] = useState('');
   const [statusFilter, setStatusFilter] = useState<'ALL' | AccountStatus>('ALL');
+  const [copiedLink, setCopiedLink] = useState(false);
 
   // Selected User for Deep Account Control
   const [inspectingUser, setInspectingUser] = useState<UserAccount | null>(null);
+
+  // Selected User for KYC Document Vault Inspector
+  const [selectedKycInspectorUser, setSelectedKycInspectorUser] = useState<UserAccount | null>(null);
 
   // Manual Balance Adjustment Modal
   const [balanceModalUser, setBalanceModalUser] = useState<UserAccount | null>(null);
@@ -210,190 +223,326 @@ export const AdminPortalModal: React.FC<AdminPortalModalProps> = ({
     return matchesSearch && matchesStatus;
   });
 
+  const unreadInquiriesCount = emails.filter(
+    e => !e.read && !e.isRead && (e.userId !== 'ALL' && !e.to.includes('All'))
+  ).length;
+
+  const handleCopyLink = () => {
+    const url = `${window.location.origin}${window.location.pathname}#admin`;
+    navigator.clipboard.writeText(url);
+    setCopiedLink(true);
+    setTimeout(() => setCopiedLink(false), 2000);
+  };
+
+  const tabTitles: Record<AdminTab, { title: string; subtitle: string }> = {
+    overview: { title: 'Executive Overview & Broker Operations', subtitle: 'Global order flow, liquidity matching, and institutional capital tracking' },
+    users: { title: 'User Account Registry & Permissions', subtitle: 'Real-time trader governance, balance adjustments, and risk tiers' },
+    setup: { title: 'Setup & Provision Account', subtitle: 'Direct onboarding for institutional, VIP, and accredited retail traders' },
+    kyc: { title: 'KYC & Biometrics Verification Desk', subtitle: 'FCA/CySEC compliant passport, ID, and liveness verification audit' },
+    funding: { title: 'Funding Approvals & Capital Queue', subtitle: 'Treasury desk clearance for deposits and withdrawals' },
+    emails: { title: 'Email Dispatch & Client Communications', subtitle: 'Automated compliance notices, margin calls, and broadcast announcements' },
+    markets: { title: 'Market Trading & Risk Controls', subtitle: 'Dynamic spread overrides, circuit breaker halting, and slippage management' },
+    audit: { title: 'Regulatory Compliance Audit Trail', subtitle: 'Immutable administrative logs with millisecond timestamps' }
+  };
+
   return (
-    <div className="fixed inset-0 z-50 flex items-center justify-center p-2 sm:p-4 bg-black/90 backdrop-blur-md animate-fadeIn">
+    <div className="fixed inset-0 z-50 flex items-center justify-center p-1 sm:p-4 bg-black/90 backdrop-blur-md animate-fadeIn">
       <div 
-        className="w-full max-w-7xl h-[92vh] bg-[#10120a] border border-[#6dff8a]/40 rounded-3xl shadow-2xl flex flex-col overflow-hidden text-left"
+        className="w-full max-w-7xl h-[94vh] bg-[#10120a] border border-[#6dff8a]/40 rounded-3xl shadow-2xl flex overflow-hidden text-left"
         onClick={(e) => e.stopPropagation()}
       >
-        {/* Top Notification Toast */}
-        {notification && (
-          <div className="bg-[#1b2b18] border-b border-[#6dff8a]/40 text-white px-4 py-2.5 text-xs text-center flex items-center justify-center gap-2 animate-fadeIn">
-            <span className="w-2 h-2 rounded-full bg-[#6dff8a] animate-ping" />
-            <span className="font-semibold">{notification}</span>
-          </div>
-        )}
+        {/* Dedicated Admin Sidebar */}
+        <AdminSidebar
+          activeTab={activeTab}
+          onSelectTab={setActiveTab}
+          pendingKycCount={pendingKycCount}
+          pendingFundingCount={pendingFundingCount}
+          unreadInquiriesCount={unreadInquiriesCount}
+          usersCount={users.length}
+          onSwitchToUserPortal={onSwitchToUserDashboard}
+          onClose={onClose}
+        />
 
-        {/* Header Bar */}
-        <div className="p-4 sm:p-5 border-b border-white/10 bg-[#161a0f] flex items-center justify-between">
-          <div className="flex items-center gap-3 sm:gap-4">
-            <TradeSharkLogo size="sm" showLtd={true} />
-            <div className="h-5 w-px bg-white/15" />
-            <div className="flex items-center gap-2">
-              <span className="text-sm sm:text-base font-bold text-white">Back-Office &amp; User Control Suite</span>
-              <span className="text-[10px] bg-[#6dff8a] text-[#15170f] px-2.5 py-0.5 rounded-full font-bold uppercase tracking-wider">
-                SUPER ADMIN
-              </span>
+        {/* Right Main Body Content */}
+        <div className="flex-1 flex flex-col h-full overflow-hidden bg-[#10120a]">
+          {/* Top Notification Toast */}
+          {notification && (
+            <div className="bg-[#1b2b18] border-b border-[#6dff8a]/40 text-white px-4 py-2.5 text-xs text-center flex items-center justify-center gap-2 animate-fadeIn">
+              <span className="w-2 h-2 rounded-full bg-[#6dff8a] animate-ping" />
+              <span className="font-semibold">{notification}</span>
+            </div>
+          )}
+
+          {/* Header Bar */}
+          <div className="p-4 sm:p-5 border-b border-white/10 bg-[#161a0f] flex items-center justify-between">
+            <div>
+              <div className="flex items-center gap-2">
+                <h2 className="text-base sm:text-lg font-bold text-white">
+                  {tabTitles[activeTab]?.title || 'Back-Office & User Control Suite'}
+                </h2>
+                <span className="text-[10px] bg-yellow-400 text-black font-mono px-2 py-0.5 rounded font-bold uppercase">
+                  /#admin
+                </span>
+              </div>
+              <p className="text-xs text-[#a3a89e]">
+                {tabTitles[activeTab]?.subtitle || 'TradeShark Super-Admin Terminal'}
+              </p>
+            </div>
+
+            <div className="flex items-center gap-2 sm:gap-3">
+              {/* Copy URL Button */}
+              <button
+                onClick={handleCopyLink}
+                className="hidden sm:inline-flex items-center gap-1.5 px-3 py-1.5 rounded-xl bg-white/5 hover:bg-white/10 text-white/80 text-xs font-semibold border border-white/10 transition-colors"
+                title="Copy admin portal direct link"
+              >
+                {copiedLink ? (
+                  <>
+                    <Check className="w-3.5 h-3.5 text-[#6dff8a]" />
+                    <span className="text-[#6dff8a]">Copied!</span>
+                  </>
+                ) : (
+                  <>
+                    <Copy className="w-3.5 h-3.5 text-white/60" />
+                    <span>Copy Link</span>
+                  </>
+                )}
+              </button>
+
+              {/* Quick Link to launch User Dashboard with chosen user */}
+              {onSwitchToUserDashboard && (
+                <button
+                  onClick={onSwitchToUserDashboard}
+                  className="hidden md:inline-flex items-center gap-1.5 px-3 py-1.5 rounded-xl bg-white/5 hover:bg-[#6dff8a]/20 text-white/80 hover:text-[#6dff8a] border border-white/10 text-xs font-semibold transition-colors"
+                  title="Switch to Client Portal (/#user)"
+                >
+                  <Eye className="w-3.5 h-3.5 text-[#6dff8a]" />
+                  <span>Client View</span>
+                </button>
+              )}
+
+              {/* Quick Provision Account Button */}
+              <button
+                onClick={() => setActiveTab('setup')}
+                className="inline-flex items-center gap-1.5 px-3 sm:px-4 py-1.5 rounded-xl bg-[#6dff8a] text-[#15170f] text-xs font-bold hover:bg-[#5ce077] transition-colors shadow-sm"
+              >
+                <UserPlus className="w-3.5 h-3.5" />
+                <span>+ Setup User</span>
+              </button>
+
+              <button
+                onClick={onClose}
+                className="p-2 rounded-full bg-white/5 hover:bg-white/10 text-white/70 hover:text-white transition-colors"
+              >
+                <X className="w-5 h-5" />
+              </button>
             </div>
           </div>
 
-          <div className="flex items-center gap-2 sm:gap-3">
-            {/* Quick Link to launch User Dashboard with chosen user */}
-            {onSwitchToUserDashboard && (
-              <button
-                onClick={onSwitchToUserDashboard}
-                className="hidden md:inline-flex items-center gap-1.5 px-3 py-1.5 rounded-xl bg-white/5 hover:bg-white/10 text-white/80 hover:text-white border border-white/10 text-xs font-semibold transition-colors"
-                title="Open client side view"
-              >
-                <Eye className="w-3.5 h-3.5 text-[#6dff8a]" />
-                <span>Open User View</span>
-              </button>
-            )}
-
-            {/* Quick Provision Account Button */}
-            <button
-              onClick={() => setActiveTab('setup')}
-              className="inline-flex items-center gap-1.5 px-3 sm:px-4 py-1.5 rounded-xl bg-[#6dff8a] text-[#15170f] text-xs font-bold hover:bg-[#5ce077] transition-colors shadow-sm"
-            >
-              <UserPlus className="w-3.5 h-3.5" />
-              <span>+ Setup User</span>
-            </button>
-
-            <button
-              onClick={onClose}
-              className="p-2 rounded-full bg-white/5 hover:bg-white/10 text-white/70 hover:text-white transition-colors"
-            >
-              <X className="w-5 h-5" />
-            </button>
-          </div>
-        </div>
-
-        {/* System Telemetry & Pending Queues Ribbon */}
-        <div className="px-6 py-2.5 bg-[#14160d] border-b border-white/5 flex flex-wrap items-center justify-between gap-3 text-xs">
-          <div className="flex items-center gap-4 text-white/70">
-            <span className="flex items-center gap-1.5 text-[#6dff8a]">
-              <span className="w-2 h-2 rounded-full bg-[#6dff8a] animate-pulse" />
-              Engine: LD4 London (1.2ms)
-            </span>
-            <span className="hidden sm:inline text-white/40">|</span>
-            <span className="hidden sm:inline">Total Client Funds: <strong className="text-white">$842,610,940</strong></span>
-            <span className="hidden md:inline text-white/40">|</span>
-            <span className="hidden md:inline">Registered Accounts: <strong className="text-white">{users.length}</strong></span>
-          </div>
-
-          <div className="flex items-center gap-3">
-            {pendingKycCount > 0 && (
-              <button
-                onClick={() => setActiveTab('kyc')}
-                className="flex items-center gap-1.5 bg-yellow-400/15 border border-yellow-400/40 text-yellow-400 px-2.5 py-1 rounded-full font-bold text-[11px] hover:bg-yellow-400/25 transition-colors"
-              >
-                <AlertCircle className="w-3 h-3" />
-                <span>{pendingKycCount} KYC Pending</span>
-              </button>
-            )}
-
-            {pendingFundingCount > 0 && (
-              <button
-                onClick={() => setActiveTab('funding')}
-                className="flex items-center gap-1.5 bg-[#6dff8a]/15 border border-[#6dff8a]/40 text-[#6dff8a] px-2.5 py-1 rounded-full font-bold text-[11px] hover:bg-[#6dff8a]/25 transition-colors"
-              >
-                <DollarSign className="w-3 h-3" />
-                <span>{pendingFundingCount} Funding Requests</span>
-              </button>
-            )}
-          </div>
-        </div>
-
-        {/* Tab Navigation */}
-        <div className="flex border-b border-white/10 bg-[#14170d] px-6 gap-2 sm:gap-4 overflow-x-auto no-scrollbar">
-          <button
-            onClick={() => setActiveTab('users')}
-            className={`py-3.5 px-3 text-xs sm:text-sm font-semibold border-b-2 whitespace-nowrap transition-colors flex items-center gap-2 ${
-              activeTab === 'users'
-                ? 'border-[#6dff8a] text-[#6dff8a]'
-                : 'border-transparent text-white/60 hover:text-white'
-            }`}
-          >
-            <Users className="w-4 h-4" />
-            <span>Accounts &amp; Permissions</span>
-            <span className="px-1.5 py-0.2 rounded-full bg-white/10 text-[10px] font-bold text-white">
-              {users.length}
-            </span>
-          </button>
-
-          <button
-            onClick={() => setActiveTab('funding')}
-            className={`py-3.5 px-3 text-xs sm:text-sm font-semibold border-b-2 whitespace-nowrap transition-colors flex items-center gap-2 ${
-              activeTab === 'funding'
-                ? 'border-[#6dff8a] text-[#6dff8a]'
-                : 'border-transparent text-white/60 hover:text-white'
-            }`}
-          >
-            <DollarSign className="w-4 h-4" />
-            <span>Fundings &amp; Approvals</span>
-            {pendingFundingCount > 0 && (
-              <span className="px-1.5 py-0.2 rounded-full bg-[#6dff8a] text-[#15170f] text-[10px] font-bold">
-                {pendingFundingCount}
+          {/* System Telemetry & Pending Queues Ribbon */}
+          <div className="px-6 py-2.5 bg-[#14160d] border-b border-white/5 flex flex-wrap items-center justify-between gap-3 text-xs">
+            <div className="flex items-center gap-4 text-white/70">
+              <span className="flex items-center gap-1.5 text-[#6dff8a]">
+                <span className="w-2 h-2 rounded-full bg-[#6dff8a] animate-pulse" />
+                Engine: LD4 London (1.2ms)
               </span>
+              <span className="hidden sm:inline text-white/40">|</span>
+              <span className="hidden sm:inline">Total Client Funds: <strong className="text-white">$842,610,940</strong></span>
+              <span className="hidden md:inline text-white/40">|</span>
+              <span className="hidden md:inline">Registered Accounts: <strong className="text-white">{users.length}</strong></span>
+            </div>
+
+            <div className="flex items-center gap-3">
+              {pendingKycCount > 0 && (
+                <button
+                  onClick={() => setActiveTab('kyc')}
+                  className="flex items-center gap-1.5 bg-yellow-400/15 border border-yellow-400/40 text-yellow-400 px-2.5 py-1 rounded-full font-bold text-[11px] hover:bg-yellow-400/25 transition-colors"
+                >
+                  <AlertCircle className="w-3 h-3" />
+                  <span>{pendingKycCount} KYC Pending</span>
+                </button>
+              )}
+
+              {pendingFundingCount > 0 && (
+                <button
+                  onClick={() => setActiveTab('funding')}
+                  className="flex items-center gap-1.5 bg-[#6dff8a]/15 border border-[#6dff8a]/40 text-[#6dff8a] px-2.5 py-1 rounded-full font-bold text-[11px] hover:bg-[#6dff8a]/25 transition-colors"
+                >
+                  <DollarSign className="w-3 h-3" />
+                  <span>{pendingFundingCount} Funding Requests</span>
+                </button>
+              )}
+            </div>
+          </div>
+
+          {/* Tab Contents */}
+          <div className="flex-1 overflow-y-auto p-4 sm:p-6 space-y-6">
+
+            {/* TAB 0: EXECUTIVE OVERVIEW */}
+            {activeTab === 'overview' && (
+              <div className="space-y-6">
+                {/* 4 Top KPI Cards */}
+                <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-4 gap-4">
+                  <div className="p-4 rounded-2xl bg-white/[0.03] border border-white/10 space-y-1">
+                    <span className="text-xs text-white/50 block">Custody Client Capital</span>
+                    <span className="text-2xl font-bold text-white font-mono">$842,610,940</span>
+                    <div className="text-[11px] text-[#6dff8a] flex items-center gap-1">
+                      <CheckCircle2 className="w-3 h-3" />
+                      <span>100% Segregated Tier-1 Bank</span>
+                    </div>
+                  </div>
+
+                  <div className="p-4 rounded-2xl bg-white/[0.03] border border-white/10 space-y-1">
+                    <span className="text-xs text-white/50 block">24h Institutional Turnover</span>
+                    <span className="text-2xl font-bold text-[#6dff8a] font-mono">$3,184,290,000</span>
+                    <div className="text-[11px] text-white/60">Across 5,000+ CFD &amp; Stock books</div>
+                  </div>
+
+                  <div className="p-4 rounded-2xl bg-white/[0.03] border border-white/10 space-y-1">
+                    <span className="text-xs text-white/50 block">Active Trader Accounts</span>
+                    <span className="text-2xl font-bold text-white font-mono">{users.length} Traders</span>
+                    <div className="text-[11px] text-yellow-400">
+                      {users.filter(u => u.status === 'Active').length} Active • {users.filter(u => u.status !== 'Active').length} Restricted
+                    </div>
+                  </div>
+
+                  <div className="p-4 rounded-2xl bg-white/[0.03] border border-white/10 space-y-1">
+                    <span className="text-xs text-white/50 block">Compliance Action Required</span>
+                    <span className="text-2xl font-bold text-yellow-400 font-mono">
+                      {pendingKycCount + pendingFundingCount} Queued
+                    </span>
+                    <div className="text-[11px] text-white/60">
+                      {pendingKycCount} KYC • {pendingFundingCount} Fundings
+                    </div>
+                  </div>
+                </div>
+
+                {/* Operations Quick Hub */}
+                <div className="p-5 rounded-3xl bg-gradient-to-r from-white/[0.04] to-white/[0.01] border border-white/10 space-y-4">
+                  <div className="flex items-center justify-between">
+                    <div>
+                      <h3 className="font-bold text-white text-sm sm:text-base">Administrative Quick Actions</h3>
+                      <p className="text-xs text-[#a3a89e]">Instant operational execution across user accounts, treasury, and compliance</p>
+                    </div>
+                    <span className="px-2.5 py-0.5 rounded-full bg-[#6dff8a]/10 border border-[#6dff8a]/30 text-[#6dff8a] text-xs font-bold">
+                      FCA &amp; CySEC Dual Licensed
+                    </span>
+                  </div>
+
+                  <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-4 gap-3">
+                    <button
+                      onClick={() => setActiveTab('setup')}
+                      className="p-4 rounded-2xl bg-[#161a0f] hover:bg-[#1f2515] border border-white/10 text-left space-y-2 group transition-all"
+                    >
+                      <div className="w-9 h-9 rounded-xl bg-[#6dff8a]/20 border border-[#6dff8a]/40 flex items-center justify-center text-[#6dff8a]">
+                        <UserPlus className="w-4 h-4" />
+                      </div>
+                      <div>
+                        <div className="font-bold text-sm text-white group-hover:text-[#6dff8a] transition-colors">
+                          Provision New Trader
+                        </div>
+                        <div className="text-[11px] text-white/50">Setup user profile, balance &amp; leverage</div>
+                      </div>
+                    </button>
+
+                    <button
+                      onClick={() => setActiveTab('kyc')}
+                      className="p-4 rounded-2xl bg-[#161a0f] hover:bg-[#1f2515] border border-white/10 text-left space-y-2 group transition-all"
+                    >
+                      <div className="w-9 h-9 rounded-xl bg-yellow-400/20 border border-yellow-400/40 flex items-center justify-center text-yellow-400">
+                        <Shield className="w-4 h-4" />
+                      </div>
+                      <div>
+                        <div className="font-bold text-sm text-white group-hover:text-yellow-400 transition-colors">
+                          Inspect KYC Vault ({pendingKycCount})
+                        </div>
+                        <div className="text-[11px] text-white/50">Biometrics, ID verification &amp; AML score</div>
+                      </div>
+                    </button>
+
+                    <button
+                      onClick={() => setActiveTab('funding')}
+                      className="p-4 rounded-2xl bg-[#161a0f] hover:bg-[#1f2515] border border-white/10 text-left space-y-2 group transition-all"
+                    >
+                      <div className="w-9 h-9 rounded-xl bg-blue-400/20 border border-blue-400/40 flex items-center justify-center text-blue-400">
+                        <DollarSign className="w-4 h-4" />
+                      </div>
+                      <div>
+                        <div className="font-bold text-sm text-white group-hover:text-blue-400 transition-colors">
+                          Clear Fundings ({pendingFundingCount})
+                        </div>
+                        <div className="text-[11px] text-white/50">Approve deposits &amp; release withdrawals</div>
+                      </div>
+                    </button>
+
+                    <button
+                      onClick={() => setActiveTab('emails')}
+                      className="p-4 rounded-2xl bg-[#161a0f] hover:bg-[#1f2515] border border-white/10 text-left space-y-2 group transition-all"
+                    >
+                      <div className="w-9 h-9 rounded-xl bg-purple-400/20 border border-purple-400/40 flex items-center justify-center text-purple-400">
+                        <Mail className="w-4 h-4" />
+                      </div>
+                      <div>
+                        <div className="font-bold text-sm text-white group-hover:text-purple-400 transition-colors">
+                          Dispatch Email Notice
+                        </div>
+                        <div className="text-[11px] text-white/50">Custom emails &amp; global dispatches</div>
+                      </div>
+                    </button>
+                  </div>
+                </div>
+
+                {/* Infrastructure Telemetry */}
+                <div className="grid grid-cols-1 md:grid-cols-2 gap-4 text-xs">
+                  <div className="p-4 rounded-2xl bg-white/[0.02] border border-white/5 space-y-3">
+                    <h4 className="font-bold text-white flex items-center gap-2">
+                      <Server className="w-4 h-4 text-[#6dff8a]" />
+                      <span>Trading Engine Infrastructure</span>
+                    </h4>
+                    <div className="space-y-2 text-white/70">
+                      <div className="flex justify-between py-1 border-b border-white/5">
+                        <span>Matching Engine Location:</span>
+                        <strong className="text-white font-mono">LD4 Equinix Slough (London)</strong>
+                      </div>
+                      <div className="flex justify-between py-1 border-b border-white/5">
+                        <span>Direct Market Access Gateways:</span>
+                        <strong className="text-white">LSE, NYSE, NASDAQ, CME Group</strong>
+                      </div>
+                      <div className="flex justify-between py-1 border-b border-white/5">
+                        <span>Average Roundtrip Execution:</span>
+                        <strong className="text-[#6dff8a] font-mono">1.2ms (Zero Requotes)</strong>
+                      </div>
+                    </div>
+                  </div>
+
+                  <div className="p-4 rounded-2xl bg-white/[0.02] border border-white/5 space-y-3">
+                    <h4 className="font-bold text-white flex items-center gap-2">
+                      <Shield className="w-4 h-4 text-yellow-400" />
+                      <span>Compliance &amp; Segregation Status</span>
+                    </h4>
+                    <div className="space-y-2 text-white/70">
+                      <div className="flex justify-between py-1 border-b border-white/5">
+                        <span>Regulatory Authorities:</span>
+                        <strong className="text-white">FCA (UK) &amp; CySEC (EU)</strong>
+                      </div>
+                      <div className="flex justify-between py-1 border-b border-white/5">
+                        <span>Client Money Protection:</span>
+                        <strong className="text-[#6dff8a]">FCSC £85k + £1M Excess Lloyd's</strong>
+                      </div>
+                      <div className="flex justify-between py-1 border-b border-white/5">
+                        <span>Automated Email Clearance:</span>
+                        <strong className="text-white">ENABLED (Real-time dispatch)</strong>
+                      </div>
+                    </div>
+                  </div>
+                </div>
+              </div>
             )}
-          </button>
 
-          <button
-            onClick={() => setActiveTab('kyc')}
-            className={`py-3.5 px-3 text-xs sm:text-sm font-semibold border-b-2 whitespace-nowrap transition-colors flex items-center gap-2 ${
-              activeTab === 'kyc'
-                ? 'border-[#6dff8a] text-[#6dff8a]'
-                : 'border-transparent text-white/60 hover:text-white'
-            }`}
-          >
-            <Shield className="w-4 h-4" />
-            <span>KYC &amp; Verification Desk</span>
-            {pendingKycCount > 0 && (
-              <span className="px-1.5 py-0.2 rounded-full bg-yellow-400 text-black text-[10px] font-bold">
-                {pendingKycCount}
-              </span>
+            {/* TAB: EMAILING SYSTEM */}
+            {activeTab === 'emails' && (
+              <AdminEmailsTab onNotify={showToast} />
             )}
-          </button>
-
-          <button
-            onClick={() => setActiveTab('setup')}
-            className={`py-3.5 px-3 text-xs sm:text-sm font-semibold border-b-2 whitespace-nowrap transition-colors flex items-center gap-2 ${
-              activeTab === 'setup'
-                ? 'border-[#6dff8a] text-[#6dff8a]'
-                : 'border-transparent text-white/60 hover:text-white'
-            }`}
-          >
-            <UserPlus className="w-4 h-4" />
-            <span>Setup New Account</span>
-          </button>
-
-          <button
-            onClick={() => setActiveTab('markets')}
-            className={`py-3.5 px-3 text-xs sm:text-sm font-semibold border-b-2 whitespace-nowrap transition-colors flex items-center gap-2 ${
-              activeTab === 'markets'
-                ? 'border-[#6dff8a] text-[#6dff8a]'
-                : 'border-transparent text-white/60 hover:text-white'
-            }`}
-          >
-            <Sliders className="w-4 h-4" />
-            <span>Market Controls</span>
-          </button>
-
-          <button
-            onClick={() => setActiveTab('audit')}
-            className={`py-3.5 px-3 text-xs sm:text-sm font-semibold border-b-2 whitespace-nowrap transition-colors flex items-center gap-2 ${
-              activeTab === 'audit'
-                ? 'border-[#6dff8a] text-[#6dff8a]'
-                : 'border-transparent text-white/60 hover:text-white'
-            }`}
-          >
-            <FileText className="w-4 h-4" />
-            <span>Regulatory Audit Trail</span>
-          </button>
-        </div>
-
-        {/* Tab Contents */}
-        <div className="flex-1 overflow-y-auto p-4 sm:p-6 space-y-6">
 
           {/* TAB 1: ACCOUNTS & CONTROLS */}
           {activeTab === 'users' && (
@@ -818,7 +967,16 @@ export const AdminPortalModal: React.FC<AdminPortalModalProps> = ({
                         </select>
                       </div>
 
-                      <div className="flex items-center gap-2">
+                      <div className="flex items-center gap-1.5">
+                        <button
+                          onClick={() => setSelectedKycInspectorUser(u)}
+                          className="px-2.5 py-1.5 rounded-lg bg-blue-500/20 hover:bg-blue-500/30 text-blue-400 border border-blue-500/40 text-xs font-semibold transition-colors flex items-center gap-1"
+                          title="Inspect uploaded passport, ID, and liveness scans"
+                        >
+                          <Eye className="w-3.5 h-3.5" />
+                          <span>Inspect Vault</span>
+                        </button>
+
                         {u.kycStatus !== 'Approved' && (
                           <button
                             onClick={() => {
@@ -827,7 +985,7 @@ export const AdminPortalModal: React.FC<AdminPortalModalProps> = ({
                             }}
                             className="px-3 py-1.5 rounded-lg bg-[#6dff8a] hover:bg-[#5ce077] text-[#15170f] font-bold text-xs transition-colors"
                           >
-                            Approve KYC
+                            Approve
                           </button>
                         )}
 
@@ -835,9 +993,9 @@ export const AdminPortalModal: React.FC<AdminPortalModalProps> = ({
                           onClick={() => {
                             setKycActionModal({ user: u, mode: 'resubmit' });
                           }}
-                          className="px-2.5 py-1.5 rounded-lg bg-white/10 hover:bg-white/15 text-white/80 text-xs font-semibold transition-colors"
+                          className="px-2 py-1.5 rounded-lg bg-white/10 hover:bg-white/15 text-white/80 text-xs font-semibold transition-colors"
                         >
-                          Request Re-upload
+                          Re-upload
                         </button>
 
                         {u.kycStatus !== 'Rejected' && (
@@ -845,7 +1003,7 @@ export const AdminPortalModal: React.FC<AdminPortalModalProps> = ({
                             onClick={() => {
                               setKycActionModal({ user: u, mode: 'reject' });
                             }}
-                            className="px-2.5 py-1.5 rounded-lg bg-red-500/20 hover:bg-red-500 text-red-400 hover:text-white text-xs font-semibold transition-colors"
+                            className="px-2 py-1.5 rounded-lg bg-red-500/20 hover:bg-red-500 text-red-400 hover:text-white text-xs font-semibold transition-colors"
                           >
                             Decline
                           </button>
@@ -1137,6 +1295,7 @@ export const AdminPortalModal: React.FC<AdminPortalModalProps> = ({
             </div>
           )}
 
+        </div>
         </div>
 
       </div>
@@ -1443,6 +1602,29 @@ export const AdminPortalModal: React.FC<AdminPortalModalProps> = ({
             </form>
           </div>
         </div>
+      )}
+
+      {/* KYC Inspector Modal */}
+      {selectedKycInspectorUser && (
+        <AdminKycInspectorModal
+          user={selectedKycInspectorUser}
+          onClose={() => setSelectedKycInspectorUser(null)}
+          onApprove={(userId) => {
+            approveKyc(userId);
+            showToast(`KYC Approved for ${selectedKycInspectorUser.name}!`);
+            setSelectedKycInspectorUser(null);
+          }}
+          onReject={(userId, reason) => {
+            rejectKyc(userId, reason);
+            showToast(`KYC Rejected for ${selectedKycInspectorUser.name}.`);
+            setSelectedKycInspectorUser(null);
+          }}
+          onRequestResubmit={(userId, reason) => {
+            requestKycResubmit(userId, reason);
+            showToast(`Re-submission requested for ${selectedKycInspectorUser.name}.`);
+            setSelectedKycInspectorUser(null);
+          }}
+        />
       )}
 
     </div>

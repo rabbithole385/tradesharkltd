@@ -6,7 +6,9 @@ import {
   UserPosition,
   UserTier,
   KycStatus,
-  AccountStatus
+  AccountStatus,
+  EmailMessage,
+  KycSubmissionPayload
 } from '../types';
 
 interface BrokerageContextType {
@@ -16,6 +18,7 @@ interface BrokerageContextType {
   transactions: FundingTransaction[];
   auditLogs: AuditLog[];
   positions: UserPosition[];
+  emails: EmailMessage[];
   
   // User Management & Setup
   createUser: (userData: Omit<UserAccount, 'id' | 'joinedDate' | 'lastIp'>) => UserAccount;
@@ -30,6 +33,7 @@ interface BrokerageContextType {
   rejectKyc: (id: string, reason: string) => void;
   requestKycResubmit: (id: string, note: string) => void;
   updateAmlRisk: (id: string, risk: 'Low' | 'Medium' | 'High') => void;
+  submitKycApplication: (payload: KycSubmissionPayload) => void;
   
   // Funding & Cashier
   approveFunding: (txId: string) => void;
@@ -43,6 +47,11 @@ interface BrokerageContextType {
   submitDeposit: (amount: number, method: FundingTransaction['method']) => void;
   submitWithdrawal: (amount: number, method: FundingTransaction['method'], destination: string) => boolean;
   
+  // Emailing & Communication System
+  sendEmail: (email: Omit<EmailMessage, 'id' | 'date' | 'read'>) => EmailMessage;
+  markEmailAsRead: (emailId: string) => void;
+  deleteEmail: (emailId: string) => void;
+
   // Positions
   closePosition: (posId: string) => void;
   openPosition: (symbol: string, name: string, type: 'BUY' | 'SELL', units: string, price: number, category: string) => void;
@@ -356,6 +365,65 @@ const INITIAL_POSITIONS: UserPosition[] = [
   }
 ];
 
+const INITIAL_EMAILS: EmailMessage[] = [
+  {
+    id: 'EML-101',
+    from: 'TradeShark Compliance Desk <compliance@tradeshark.co.uk>',
+    to: 'alex.m@gmail.com',
+    userId: 'USR-891',
+    userName: 'Alex Mercer',
+    subject: 'Verification Certified: Your Account is Now Tier 2 Verified Pro',
+    body: 'Dear Alex Mercer,\n\nWe are pleased to inform you that your government-issued identity documents (Passport #GB-94821039) and proof of address have been fully verified under UK FCA / CySEC regulatory standards.\n\nYour account has been elevated to Tier 2 - Verified Pro. Your allocated leverage is now 1:100 with full trading permissions on global equities, forex, indices, and crypto CFDs.\n\nThank you for choosing TradeShark Ltd.\n\nSincerely,\nCompliance & Risk Operations\nTradeShark Ltd, London',
+    category: 'KYC',
+    priority: 'High',
+    date: '2026-09-09 09:15',
+    read: false,
+    direction: 'outbound'
+  },
+  {
+    id: 'EML-102',
+    from: 'TradeShark Treasury Desk <treasury@tradeshark.co.uk>',
+    to: 'alex.m@gmail.com',
+    userId: 'USR-891',
+    userName: 'Alex Mercer',
+    subject: 'Deposit Clearance Receipt: $10,000.00 via Faster Payments',
+    body: 'Dear Alex Mercer,\n\nWe confirm receipt and successful clearing of your incoming deposit of $10,000.00 USD via UK Faster Payments (Reference: FPS-UK-28471).\n\nFunds have been credited to your segregated client money account and are immediately available for trading and margin allocations.\n\nBest regards,\nTreasury & Cashier Services\nTradeShark Ltd',
+    category: 'FUNDING',
+    priority: 'Normal',
+    date: '2026-09-09 16:32',
+    read: true,
+    direction: 'outbound'
+  },
+  {
+    id: 'EML-103',
+    from: 'Chief Market Strategist <research@tradeshark.co.uk>',
+    to: 'All Clients',
+    userId: 'ALL',
+    userName: 'All Clients',
+    subject: 'Market Advisory: Central Bank Policy Meeting & Weekend Crypto Spreads',
+    body: 'Institutional Client Notice:\n\nIn anticipation of upcoming central bank interest rate decisions this Thursday at 14:00 GMT, increased market volatility and spread widening may occur across FX majors (GBP/USD, EUR/USD) and US Index futures.\n\nPlease review your active open positions, margin utilization, and stop-loss orders. The TradeShark institutional trading desk remains operational 24/7.\n\nChief Market Strategist\nTradeShark Research & Analytics',
+    category: 'MARKET_ALERT',
+    priority: 'High',
+    date: '2026-09-10 08:00',
+    read: false,
+    direction: 'outbound'
+  },
+  {
+    id: 'EML-104',
+    from: 'Elena Rostov <e.rostov@proton.me>',
+    to: 'TradeShark Support <support@tradeshark.co.uk>',
+    userId: 'USR-894',
+    userName: 'Elena Rostov',
+    subject: 'Inquiry: Re-uploading my updated Berlin residence registration',
+    body: 'Hello Compliance Team,\n\nI noticed my trading was set to frozen due to my utility bill being slightly over 90 days. I have obtained my official German Bürgeramt registration certificate from last week. I would like to know if I can upload this directly through the portal KYC verification tab.\n\nThank you,\nElena Rostov',
+    category: 'KYC',
+    priority: 'Normal',
+    date: '2026-09-10 10:12',
+    read: false,
+    direction: 'inbound'
+  }
+];
+
 const BrokerageContext = createContext<BrokerageContextType | undefined>(undefined);
 
 export const BrokerageProvider: React.FC<{ children: React.ReactNode }> = ({ children }) => {
@@ -364,6 +432,7 @@ export const BrokerageProvider: React.FC<{ children: React.ReactNode }> = ({ chi
   const [transactions, setTransactions] = useState<FundingTransaction[]>(INITIAL_TRANSACTIONS);
   const [auditLogs, setAuditLogs] = useState<AuditLog[]>(INITIAL_AUDIT_LOGS);
   const [positions, setPositions] = useState<UserPosition[]>(INITIAL_POSITIONS);
+  const [emails, setEmails] = useState<EmailMessage[]>(INITIAL_EMAILS);
 
   const currentUser = users.find(u => u.id === currentUserId) || users[0];
 
@@ -496,9 +565,11 @@ export const BrokerageProvider: React.FC<{ children: React.ReactNode }> = ({ chi
 
   // 7. KYC Approvals
   const approveKyc = (id: string, promotedTier?: UserTier) => {
+    let targetUser: UserAccount | undefined;
     setUsers(prev => prev.map(u => {
       if (u.id === id) {
         const nextTier = promotedTier || (u.tier === 'Tier 1 - Standard' ? 'Tier 2 - Verified Pro' : u.tier);
+        targetUser = u;
         addAuditLog(
           'KYC Certified', 
           `Document identity verified. KYC status set to APPROVED. Account tier promoted to ${nextTier}.`, 
@@ -515,11 +586,27 @@ export const BrokerageProvider: React.FC<{ children: React.ReactNode }> = ({ chi
       }
       return u;
     }));
+
+    if (targetUser) {
+      sendEmail({
+        from: 'TradeShark Compliance Desk <compliance@tradeshark.co.uk>',
+        to: targetUser.email,
+        userId: targetUser.id,
+        userName: targetUser.name,
+        subject: `Regulatory Identity Certified: Welcome to ${promotedTier || 'Tier 2 - Verified Pro'}`,
+        body: `Dear ${targetUser.name},\n\nCongratulations! Your regulatory identity documents and address verification have been officially certified under FCA / CySEC standards.\n\nYour account has been elevated to ${promotedTier || 'Tier 2 - Verified Pro'}. Full institutional trading execution and market access is now active.\n\nBest regards,\nTradeShark Compliance Operations\n100 Bishopsgate, London EC2N 4AG`,
+        category: 'KYC',
+        priority: 'High',
+        direction: 'outbound'
+      });
+    }
   };
 
   const rejectKyc = (id: string, reason: string) => {
+    let targetUser: UserAccount | undefined;
     setUsers(prev => prev.map(u => {
       if (u.id === id) {
+        targetUser = u;
         addAuditLog(
           'KYC Rejected', 
           `Verification documents declined. Reason: ${reason}`, 
@@ -530,11 +617,27 @@ export const BrokerageProvider: React.FC<{ children: React.ReactNode }> = ({ chi
       }
       return u;
     }));
+
+    if (targetUser) {
+      sendEmail({
+        from: 'TradeShark Compliance Desk <compliance@tradeshark.co.uk>',
+        to: targetUser.email,
+        userId: targetUser.id,
+        userName: targetUser.name,
+        subject: 'KYC Verification Notice: Application Declined',
+        body: `Dear ${targetUser.name},\n\nOur compliance officer reviewed your submitted identification. We were unable to certify your documents due to the following reason:\n\n${reason}\n\nPlease check that your documents meet regulatory standards and contact compliance@tradeshark.co.uk if you believe this is an error.\n\nSincerely,\nTradeShark Compliance Desk`,
+        category: 'KYC',
+        priority: 'Urgent',
+        direction: 'outbound'
+      });
+    }
   };
 
   const requestKycResubmit = (id: string, note: string) => {
+    let targetUser: UserAccount | undefined;
     setUsers(prev => prev.map(u => {
       if (u.id === id) {
+        targetUser = u;
         addAuditLog(
           'KYC Action Required', 
           `Requested resubmission from client: ${note}`, 
@@ -545,6 +648,67 @@ export const BrokerageProvider: React.FC<{ children: React.ReactNode }> = ({ chi
       }
       return u;
     }));
+
+    if (targetUser) {
+      sendEmail({
+        from: 'TradeShark Compliance Desk <compliance@tradeshark.co.uk>',
+        to: targetUser.email,
+        userId: targetUser.id,
+        userName: targetUser.name,
+        subject: 'Action Required: KYC Verification Update Needed',
+        body: `Dear ${targetUser.name},\n\nWe require an updated or clearer document to complete your account certification:\n\nCompliance Note: ${note}\n\nPlease log in to your Client Portal and navigate to the KYC Verification Center to upload the revised file.\n\nThank you,\nTradeShark Compliance Desk`,
+        category: 'KYC',
+        priority: 'Urgent',
+        direction: 'outbound'
+      });
+    }
+  };
+
+  const submitKycApplication = (payload: KycSubmissionPayload) => {
+    setUsers(prev => prev.map(u => {
+      if (u.id === payload.userId) {
+        return {
+          ...u,
+          name: payload.fullName || u.name,
+          dateOfBirth: payload.dateOfBirth,
+          country: payload.nationality || u.country,
+          streetAddress: payload.streetAddress,
+          city: payload.city,
+          postalCode: payload.postalCode,
+          kycStatus: 'Pending',
+          kycDocType: payload.docType,
+          kycDocNumber: payload.docNumber,
+          kycExpiryDate: payload.docExpiryDate,
+          kycDocFrontName: payload.docFrontName,
+          kycDocBackName: payload.docBackName,
+          kycProofAddressName: payload.proofAddressName,
+          kycSelfieVerified: payload.selfieTaken,
+          facialMatchScore: 98.7,
+          kycSubmittedDate: new Date().toISOString().replace('T', ' ').substring(0, 16),
+          kycNotes: 'Fresh application documents uploaded via Client Portal'
+        };
+      }
+      return u;
+    }));
+
+    addAuditLog(
+      'KYC Application Submitted', 
+      `Client uploaded ${payload.docType} (#${payload.docNumber}) and Proof of Residence for verification.`, 
+      'KYC', 
+      payload.fullName
+    );
+
+    sendEmail({
+      from: 'TradeShark Compliance Desk <compliance@tradeshark.co.uk>',
+      to: currentUser.email,
+      userId: payload.userId,
+      userName: payload.fullName,
+      subject: 'KYC Documents Received & In Verification Queue',
+      body: `Dear ${payload.fullName},\n\nThank you for submitting your verification details.\n\nDocuments Received:\n- Primary ID: ${payload.docType} (#${payload.docNumber})\n- Proof of Address: ${payload.proofAddressName}\n- Biometric Liveness: Certified\n\nOur compliance queue will review your file shortly. You will receive an immediate notification upon certification.\n\nTradeShark Compliance Operations`,
+      category: 'KYC',
+      priority: 'Normal',
+      direction: 'outbound'
+    });
   };
 
   const updateAmlRisk = (id: string, amlRisk: 'Low' | 'Medium' | 'High') => {
@@ -559,8 +723,10 @@ export const BrokerageProvider: React.FC<{ children: React.ReactNode }> = ({ chi
 
   // 8. Funding Approvals
   const approveFunding = (txId: string) => {
+    let resolvedTx: FundingTransaction | undefined;
     setTransactions(prev => prev.map(tx => {
       if (tx.id === txId && tx.status === 'Pending Approval') {
+        resolvedTx = tx;
         // Apply balance changes
         if (tx.type === 'Deposit') {
           setUsers(uList => uList.map(u => {
@@ -588,6 +754,28 @@ export const BrokerageProvider: React.FC<{ children: React.ReactNode }> = ({ chi
       }
       return tx;
     }));
+
+    if (resolvedTx) {
+      const tx = resolvedTx;
+      const targetUser = users.find(u => u.id === tx.userId);
+      if (targetUser) {
+        sendEmail({
+          from: 'TradeShark Treasury Desk <treasury@tradeshark.co.uk>',
+          to: targetUser.email,
+          userId: targetUser.id,
+          userName: targetUser.name,
+          subject: tx.type === 'Deposit' 
+            ? `Funds Credited: Deposit of $${tx.amount.toLocaleString()} Settled`
+            : `Withdrawal Dispatched: $${tx.amount.toLocaleString()} Released`,
+          body: tx.type === 'Deposit'
+            ? `Dear ${targetUser.name},\n\nWe confirm that your deposit of $${tx.amount.toLocaleString()} via ${tx.method} has cleared and has been credited to your live balance.\n\nReference: ${tx.reference}\n\nHappy trading,\nTradeShark Treasury Operations`
+            : `Dear ${targetUser.name},\n\nYour withdrawal of $${tx.amount.toLocaleString()} via ${tx.method} has been authorized and dispatched to your destination account:\n${tx.destination || tx.method}\n\nReference: ${tx.reference}\n\nTradeShark Cashier Desk`,
+          category: 'FUNDING',
+          priority: 'Normal',
+          direction: 'outbound'
+        });
+      }
+    }
   };
 
   const rejectFunding = (txId: string, reason: string) => {
@@ -761,6 +949,33 @@ export const BrokerageProvider: React.FC<{ children: React.ReactNode }> = ({ chi
     setPositions(prev => [newPos, ...prev]);
   };
 
+  // 13. Emailing System
+  const sendEmail = (emailData: Omit<EmailMessage, 'id' | 'date' | 'read'>): EmailMessage => {
+    const newEmail: EmailMessage = {
+      ...emailData,
+      id: `EML-${Date.now()}`,
+      date: new Date().toISOString().replace('T', ' ').substring(0, 16),
+      read: false
+    };
+
+    setEmails(prev => [newEmail, ...prev]);
+    addAuditLog(
+      'Email Sent',
+      `Sent [${newEmail.category}] dispatch to ${newEmail.to} ("${newEmail.subject}")`,
+      'COMPLIANCE',
+      newEmail.userName || newEmail.to
+    );
+    return newEmail;
+  };
+
+  const markEmailAsRead = (emailId: string) => {
+    setEmails(prev => prev.map(e => e.id === emailId ? { ...e, read: true } : e));
+  };
+
+  const deleteEmail = (emailId: string) => {
+    setEmails(prev => prev.filter(e => e.id !== emailId));
+  };
+
   return (
     <BrokerageContext.Provider value={{
       users,
@@ -769,6 +984,7 @@ export const BrokerageProvider: React.FC<{ children: React.ReactNode }> = ({ chi
       transactions,
       auditLogs,
       positions,
+      emails,
       createUser,
       updateUser,
       setUserStatus,
@@ -779,11 +995,15 @@ export const BrokerageProvider: React.FC<{ children: React.ReactNode }> = ({ chi
       rejectKyc,
       requestKycResubmit,
       updateAmlRisk,
+      submitKycApplication,
       approveFunding,
       rejectFunding,
       manualBalanceAdjustment,
       submitDeposit,
       submitWithdrawal,
+      sendEmail,
+      markEmailAsRead,
+      deleteEmail,
       closePosition,
       openPosition
     }}>

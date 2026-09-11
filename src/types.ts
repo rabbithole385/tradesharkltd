@@ -78,6 +78,47 @@ export interface UserAccount {
   joinedDate: string;
   lastIp: string;
   accountManager: string;
+  dateOfBirth?: string;
+  streetAddress?: string;
+  city?: string;
+  postalCode?: string;
+  kycDocFrontName?: string;
+  kycDocBackName?: string;
+  kycProofAddressName?: string;
+  kycSelfieVerified?: boolean;
+}
+
+export interface EmailMessage {
+  id: string;
+  from: string;
+  to: string;
+  userId: string; // user ID or 'ALL'
+  userName?: string;
+  subject: string;
+  body: string;
+  category: 'KYC' | 'FUNDING' | 'ACCOUNT' | 'TRADING' | 'MARKET_ALERT' | 'SUPPORT';
+  priority: 'Normal' | 'High' | 'Urgent';
+  date: string;
+  read: boolean;
+  isRead?: boolean;
+  direction: 'outbound' | 'inbound'; // outbound: admin -> user; inbound: user -> admin
+}
+
+export interface KycSubmissionPayload {
+  userId: string;
+  fullName: string;
+  dateOfBirth: string;
+  nationality: string;
+  streetAddress: string;
+  city: string;
+  postalCode: string;
+  docType: 'Passport' | 'National ID' | 'Drivers License' | 'Proof of Address';
+  docNumber: string;
+  docExpiryDate: string;
+  docFrontName: string;
+  docBackName?: string;
+  proofAddressName: string;
+  selfieTaken: boolean;
 }
 
 export interface FundingTransaction {

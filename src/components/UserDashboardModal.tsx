@@ -20,11 +20,17 @@ import {
   Building,
   CreditCard,
   Lock,
-  FileText
+  FileText,
+  Copy,
+  Check,
+  ShieldAlert
 } from 'lucide-react';
 import { TradeSharkLogo } from './TradeSharkLogo';
 import { useBrokerage } from '../context/BrokerageContext';
 import { FundingTransaction } from '../types';
+import { UserSidebar, UserTab } from './UserPortal/UserSidebar';
+import { UserKycTab } from './UserPortal/UserKycTab';
+import { UserInboxTab } from './UserPortal/UserInboxTab';
 
 interface UserDashboardModalProps {
   isOpen: boolean;
@@ -46,13 +52,15 @@ export const UserDashboardModal: React.FC<UserDashboardModalProps> = ({
     currentUser,
     transactions,
     positions,
+    emails,
     closePosition,
     submitDeposit,
     submitWithdrawal
   } = useBrokerage();
 
-  const [activeTab, setActiveTab] = useState<'portfolio' | 'positions' | 'copy' | 'deposit' | 'withdraw' | 'history' | 'settings'>('portfolio');
+  const [activeTab, setActiveTab] = useState<UserTab>('portfolio');
   const [accountType, setAccountType] = useState<'real' | 'virtual'>('real');
+  const [copiedLink, setCopiedLink] = useState(false);
   
   // Deposit form state
   const [depositAmount, setDepositAmount] = useState('5000');
@@ -95,7 +103,18 @@ export const UserDashboardModal: React.FC<UserDashboardModalProps> = ({
   const userTransactions = transactions.filter(t => t.userId === currentUser.id);
   const totalPositionsProfit = userPositions.reduce((acc, p) => acc + p.profit, 0);
 
+  const unreadEmailsCount = emails.filter(
+    e => (!e.read && !e.isRead) && (e.userId === currentUser.id || e.userId === 'ALL' || e.to.includes('All'))
+  ).length;
+
   const activeBalance = accountType === 'real' ? currentUser.realBalance : currentUser.virtualBalance;
+
+  const handleCopyLink = () => {
+    const url = `${window.location.origin}${window.location.pathname}#user`;
+    navigator.clipboard.writeText(url);
+    setCopiedLink(true);
+    setTimeout(() => setCopiedLink(false), 2000);
+  };
 
   const handleDepositSubmit = (e: React.FormEvent) => {
     e.preventDefault();
@@ -124,198 +143,137 @@ export const UserDashboardModal: React.FC<UserDashboardModalProps> = ({
     }
   };
 
+  const tabTitles: Record<UserTab, { title: string; subtitle: string }> = {
+    portfolio: { title: 'Portfolio Overview & Wallet', subtitle: 'Real-time equity breakdown and allocation analytics' },
+    positions: { title: 'Open CFD & Margin Positions', subtitle: 'Manage active leverage contracts and take-profit/stop-loss' },
+    markets: { title: 'Live Screener & Markets', subtitle: 'Institutional execution across 5,000+ instruments' },
+    deposit: { title: 'Deposit Client Capital', subtitle: 'Segregated accounts under FCA client money protection' },
+    withdraw: { title: 'Disburse Funds', subtitle: 'Secure disbursements to validated bank accounts' },
+    kyc: { title: 'KYC & Regulatory Verification', subtitle: 'FCA & CySEC compliant identity and address verification' },
+    inbox: { title: 'Official Communications & Inbox', subtitle: 'Regulatory dispatches, clearance notes, and broker messaging' },
+    copy: { title: 'CopyTrader™ Portfolios', subtitle: 'Automatically mirror verified Pro Investors' },
+    history: { title: 'Funding & Ledger History', subtitle: 'Complete immutable record of all deposits, withdrawals, and trades' },
+    settings: { title: 'Account Settings & Compliance Profile', subtitle: 'Manage trading limits, leverage, and account tier' }
+  };
+
   return (
-    <div className="fixed inset-0 z-50 flex items-center justify-center p-2 sm:p-5 bg-black/85 backdrop-blur-md animate-fadeIn">
+    <div className="fixed inset-0 z-50 flex items-center justify-center p-1 sm:p-4 bg-black/90 backdrop-blur-md animate-fadeIn">
       <div 
-        className="w-full max-w-5xl h-[92vh] bg-[#14170e] border border-white/15 rounded-3xl shadow-2xl flex flex-col overflow-hidden text-left"
+        className="w-full max-w-7xl h-[94vh] bg-[#14170e] border border-white/15 rounded-3xl shadow-2xl flex overflow-hidden text-left"
         onClick={(e) => e.stopPropagation()}
       >
-        {/* Header Bar */}
-        <div className="p-4 sm:p-5 border-b border-white/10 bg-[#191d12] flex items-center justify-between">
-          <div className="flex items-center gap-3 sm:gap-4">
-            <TradeSharkLogo size="sm" showLtd={true} />
-            <div className="h-5 w-px bg-white/15" />
-            <div className="flex items-center gap-2">
-              <span className="text-xs sm:text-sm font-bold text-white">Client Portal</span>
-              <span className="text-[10px] bg-[#6dff8a]/15 text-[#6dff8a] border border-[#6dff8a]/30 px-2 py-0.5 rounded-full font-bold">
-                USER DASHBOARD
-              </span>
-            </div>
-          </div>
+        {/* Dedicated Sidebar for All Options */}
+        <UserSidebar
+          activeTab={activeTab}
+          onSelectTab={setActiveTab}
+          currentUser={currentUser}
+          accountType={accountType}
+          onToggleAccountType={setAccountType}
+          positionsCount={userPositions.length}
+          unreadEmailsCount={unreadEmailsCount}
+          onOpenAdminPortal={onOpenAdminPortal}
+          onClose={onClose}
+        />
 
-          <div className="flex items-center gap-3">
-            {/* Real vs Virtual Switcher */}
-            <div className="flex items-center bg-black/40 p-1 rounded-xl border border-white/10 text-xs">
-              <button
-                onClick={() => setAccountType('real')}
-                className={`px-3 py-1 rounded-lg font-bold transition-all ${
-                  accountType === 'real' 
-                    ? 'bg-[#6dff8a] text-[#15170f] shadow-sm' 
-                    : 'text-white/60 hover:text-white'
-                }`}
-              >
-                Real Account
-              </button>
-              <button
-                onClick={() => setAccountType('virtual')}
-                className={`px-3 py-1 rounded-lg font-bold transition-all ${
-                  accountType === 'virtual' 
-                    ? 'bg-[#6dff8a] text-[#15170f] shadow-sm' 
-                    : 'text-white/60 hover:text-white'
-                }`}
-              >
-                $100k Virtual Demo
-              </button>
-            </div>
-
-            {onOpenAdminPortal && (
-              <button
-                onClick={onOpenAdminPortal}
-                className="hidden md:inline-flex items-center gap-1.5 px-3 py-1 rounded-xl bg-white/5 hover:bg-yellow-400/20 text-white/80 hover:text-yellow-400 border border-white/10 text-xs font-semibold transition-colors"
-                title="Open Administrative Console"
-              >
-                <span>Admin Console</span>
-              </button>
-            )}
-
-            <button
-              onClick={onClose}
-              className="p-2 rounded-full bg-white/5 hover:bg-white/10 text-white/70 hover:text-white transition-colors"
-            >
-              <X className="w-5 h-5" />
-            </button>
-          </div>
-        </div>
-
-        {/* User Summary Subheader */}
-        <div className="px-6 py-3.5 bg-[#171a10] border-b border-white/5 flex flex-wrap items-center justify-between gap-4">
-          <div className="flex items-center gap-3">
-            <div className="w-10 h-10 rounded-full bg-[#6dff8a]/20 border border-[#6dff8a]/40 flex items-center justify-center text-[#6dff8a] font-bold text-sm">
-              {currentUser.name.slice(0, 2).toUpperCase()}
-            </div>
+        {/* Right Main Body Content */}
+        <div className="flex-1 flex flex-col h-full overflow-hidden bg-[#15170f]">
+          {/* Header Bar */}
+          <div className="p-4 sm:p-5 border-b border-white/10 bg-[#171a10] flex items-center justify-between">
             <div>
-              <div className="text-sm font-bold text-white flex items-center gap-2">
-                <span>{currentUser.name}</span>
-                <span className={`flex items-center gap-1 text-[10px] px-2 py-0.5 rounded-full font-semibold ${
-                  currentUser.kycStatus === 'Approved'
-                    ? 'text-[#6dff8a] bg-[#6dff8a]/10 border border-[#6dff8a]/30'
-                    : 'text-yellow-400 bg-yellow-400/10 border border-yellow-400/30'
-                }`}>
-                  <ShieldCheck className="w-3 h-3" />
-                  {currentUser.tier} • {currentUser.kycStatus}
+              <div className="flex items-center gap-2">
+                <h2 className="text-base sm:text-lg font-bold text-white">
+                  {tabTitles[activeTab]?.title || 'Client Portal'}
+                </h2>
+                <span className="text-[10px] bg-[#6dff8a]/20 text-[#6dff8a] font-mono px-2 py-0.5 rounded font-bold uppercase">
+                  /#user
                 </span>
               </div>
-              <div className="text-xs text-[#a3a89e]">
-                {currentUser.email} • ID: #{currentUser.id} • Leverage 1:{currentUser.leverage} • Mgr: {currentUser.accountManager}
+              <p className="text-xs text-[#a3a89e]">
+                {tabTitles[activeTab]?.subtitle || 'TradeShark Client Portal'}
+              </p>
+            </div>
+
+            <div className="flex items-center gap-2 sm:gap-3">
+              {/* Copy URL Button */}
+              <button
+                onClick={handleCopyLink}
+                className="hidden sm:inline-flex items-center gap-1.5 px-3 py-1.5 rounded-xl bg-white/5 hover:bg-white/10 text-white/80 text-xs font-semibold border border-white/10 transition-colors"
+                title="Copy client portal direct link"
+              >
+                {copiedLink ? (
+                  <>
+                    <Check className="w-3.5 h-3.5 text-[#6dff8a]" />
+                    <span className="text-[#6dff8a]">Copied!</span>
+                  </>
+                ) : (
+                  <>
+                    <Copy className="w-3.5 h-3.5 text-white/60" />
+                    <span>Copy Link</span>
+                  </>
+                )}
+              </button>
+
+              {onOpenAdminPortal && (
+                <button
+                  onClick={onOpenAdminPortal}
+                  className="hidden md:inline-flex items-center gap-1.5 px-3 py-1.5 rounded-xl bg-white/5 hover:bg-yellow-400/20 text-white/80 hover:text-yellow-400 border border-white/10 text-xs font-semibold transition-colors"
+                  title="Switch to Admin Portal (/#admin)"
+                >
+                  <ShieldAlert className="w-3.5 h-3.5 text-yellow-400" />
+                  <span>Admin Console</span>
+                </button>
+              )}
+
+              <button
+                onClick={onClose}
+                className="p-2 rounded-full bg-white/5 hover:bg-white/10 text-white/70 hover:text-white transition-colors"
+                title="Close Portal"
+              >
+                <X className="w-5 h-5" />
+              </button>
+            </div>
+          </div>
+
+          {/* Toast Notice */}
+          {(depositNotice || withdrawNotice) && (
+            <div className="bg-[#1b2b18] border-b border-[#6dff8a]/40 text-white px-4 py-2.5 text-xs text-center flex items-center justify-center gap-2 animate-fadeIn">
+              <span className="w-2 h-2 rounded-full bg-[#6dff8a] animate-ping" />
+              <span className="font-semibold">{depositNotice || withdrawNotice}</span>
+            </div>
+          )}
+
+          {/* Compliance / Trading Freeze Alert if Admin suspended or froze trading */}
+          {(!currentUser.allowTrading || currentUser.status === 'Trading Frozen' || currentUser.status === 'Suspended') && (
+            <div className="bg-red-950/40 border-b border-red-500/40 px-6 py-2.5 text-xs text-red-200 flex items-center justify-between gap-3">
+              <div className="flex items-center gap-2">
+                <AlertTriangle className="w-4 h-4 text-red-400 shrink-0" />
+                <span>
+                  <strong>Compliance Notice:</strong> Account trading privileges are currently <strong>{currentUser.status}</strong>. 
+                  {currentUser.kycNotes && ` (${currentUser.kycNotes})`}
+                </span>
               </div>
+              <span className="text-[11px] font-mono text-red-300">Contact: {currentUser.accountManager}</span>
             </div>
-          </div>
+          )}
 
-          <div className="flex items-center gap-6">
-            <div>
-              <span className="text-[11px] text-white/50 block">Live Real Balance</span>
-              <span className="text-xl sm:text-2xl font-bold text-white font-mono">
-                ${currentUser.realBalance.toLocaleString(undefined, { minimumFractionDigits: 2 })}
-              </span>
-            </div>
-            <div className="border-l border-white/10 pl-6 hidden sm:block">
-              <span className="text-[11px] text-white/50 block">Unrealized P&amp;L</span>
-              <span className="text-xl sm:text-2xl font-bold text-[#6dff8a] font-mono flex items-center gap-1">
-                +${totalPositionsProfit.toLocaleString(undefined, { minimumFractionDigits: 2 })}
-                <span className="text-xs bg-[#6dff8a]/15 px-1.5 py-0.5 rounded font-bold">+3.84%</span>
-              </span>
-            </div>
-          </div>
-        </div>
+          {/* Tab Content Container */}
+          <div className="flex-1 overflow-y-auto p-4 sm:p-6 space-y-6">
 
-        {/* Compliance / Trading Freeze Alert if Admin suspended or froze trading */}
-        {(!currentUser.allowTrading || currentUser.status === 'Trading Frozen' || currentUser.status === 'Suspended') && (
-          <div className="bg-red-950/40 border-b border-red-500/40 px-6 py-2.5 text-xs text-red-200 flex items-center justify-between gap-3">
-            <div className="flex items-center gap-2">
-              <AlertTriangle className="w-4 h-4 text-red-400 shrink-0" />
-              <span>
-                <strong>Compliance Notice:</strong> Account trading privileges are currently <strong>{currentUser.status}</strong>. 
-                {currentUser.kycNotes && ` (${currentUser.kycNotes})`}
-              </span>
-            </div>
-            <span className="text-[11px] font-mono text-red-300">Contact: {currentUser.accountManager}</span>
-          </div>
-        )}
+            {/* TAB: KYC & VERIFICATION */}
+            {activeTab === 'kyc' && (
+              <UserKycTab currentUser={currentUser} onNotify={(msg) => {
+                setDepositNotice(msg);
+                setTimeout(() => setDepositNotice(null), 4500);
+              }} />
+            )}
 
-        {/* Tab Navigation */}
-        <div className="flex border-b border-white/10 bg-[#16180f] px-6 gap-2 sm:gap-4 overflow-x-auto no-scrollbar text-xs sm:text-sm font-semibold">
-          <button
-            onClick={() => setActiveTab('portfolio')}
-            className={`py-3 px-3 border-b-2 whitespace-nowrap transition-colors ${
-              activeTab === 'portfolio' ? 'border-[#6dff8a] text-[#6dff8a]' : 'border-transparent text-white/60 hover:text-white'
-            }`}
-          >
-            Overview &amp; Wallet
-          </button>
-          <button
-            onClick={() => setActiveTab('positions')}
-            className={`py-3 px-3 border-b-2 whitespace-nowrap transition-colors flex items-center gap-2 ${
-              activeTab === 'positions' ? 'border-[#6dff8a] text-[#6dff8a]' : 'border-transparent text-white/60 hover:text-white'
-            }`}
-          >
-            <span>Positions</span>
-            <span className="px-1.5 py-0.2 rounded-full bg-white/10 text-[10px] font-bold text-white">
-              {userPositions.length}
-            </span>
-          </button>
-          <button
-            onClick={() => setActiveTab('deposit')}
-            className={`py-3 px-3 border-b-2 whitespace-nowrap transition-colors flex items-center gap-1.5 ${
-              activeTab === 'deposit' ? 'border-[#6dff8a] text-[#6dff8a]' : 'border-transparent text-white/60 hover:text-white'
-            }`}
-          >
-            <ArrowDownLeft className="w-3.5 h-3.5 text-[#6dff8a]" />
-            <span>Deposit</span>
-          </button>
-          <button
-            onClick={() => setActiveTab('withdraw')}
-            className={`py-3 px-3 border-b-2 whitespace-nowrap transition-colors flex items-center gap-1.5 ${
-              activeTab === 'withdraw' ? 'border-[#6dff8a] text-[#6dff8a]' : 'border-transparent text-white/60 hover:text-white'
-            }`}
-          >
-            <ArrowUpRight className="w-3.5 h-3.5 text-yellow-400" />
-            <span>Withdraw</span>
-          </button>
-          <button
-            onClick={() => setActiveTab('history')}
-            className={`py-3 px-3 border-b-2 whitespace-nowrap transition-colors flex items-center gap-1.5 ${
-              activeTab === 'history' ? 'border-[#6dff8a] text-[#6dff8a]' : 'border-transparent text-white/60 hover:text-white'
-            }`}
-          >
-            <FileText className="w-3.5 h-3.5" />
-            <span>Funding History</span>
-            <span className="px-1.5 py-0.2 rounded-full bg-white/10 text-[10px] font-bold text-white">
-              {userTransactions.length}
-            </span>
-          </button>
-          <button
-            onClick={() => setActiveTab('copy')}
-            className={`py-3 px-3 border-b-2 whitespace-nowrap transition-colors flex items-center gap-2 ${
-              activeTab === 'copy' ? 'border-[#6dff8a] text-[#6dff8a]' : 'border-transparent text-white/60 hover:text-white'
-            }`}
-          >
-            <span>CopyTrader™</span>
-            <span className="px-1.5 py-0.2 rounded-full bg-[#6dff8a]/20 text-[10px] font-bold text-[#6dff8a]">
-              {copiedInvestors.length}
-            </span>
-          </button>
-          <button
-            onClick={() => setActiveTab('settings')}
-            className={`py-3 px-3 border-b-2 whitespace-nowrap transition-colors ${
-              activeTab === 'settings' ? 'border-[#6dff8a] text-[#6dff8a]' : 'border-transparent text-white/60 hover:text-white'
-            }`}
-          >
-            Account &amp; KYC
-          </button>
-        </div>
-
-        {/* Tab Body */}
-        <div className="flex-1 overflow-y-auto p-4 sm:p-6 space-y-6">
+            {/* TAB: OFFICIAL INBOX */}
+            {activeTab === 'inbox' && (
+              <UserInboxTab currentUser={currentUser} onNotify={(msg) => {
+                setDepositNotice(msg);
+                setTimeout(() => setDepositNotice(null), 4500);
+              }} />
+            )}
 
           {/* TAB 1: OVERVIEW */}
           {activeTab === 'portfolio' && (
@@ -866,6 +824,7 @@ export const UserDashboardModal: React.FC<UserDashboardModalProps> = ({
             </div>
           )}
 
+        </div>
         </div>
 
       </div>

@@ -17,17 +17,7 @@ interface FooterProps {
   onOpenAdminPortal?: () => void;
 }
 
-export const Footer: React.FC<FooterProps> = ({ onOpenUserDashboard, onOpenAdminPortal }) => {
-  const handleLinkClick = (e: React.MouseEvent<HTMLAnchorElement>, href: string) => {
-    if (href === '#user-portal' && onOpenUserDashboard) {
-      e.preventDefault();
-      onOpenUserDashboard();
-    } else if ((href === '#admin-portal' || href === '#kyc') && onOpenAdminPortal) {
-      e.preventDefault();
-      onOpenAdminPortal();
-    }
-  };
-
+export const Footer: React.FC<FooterProps> = () => {
   return (
     <footer className="bg-[#0f110a] text-white/80 pt-16 pb-12 border-t border-white/10">
       <div className="max-w-7xl mx-auto px-4 sm:px-6 lg:px-8 space-y-12">
@@ -111,7 +101,6 @@ export const Footer: React.FC<FooterProps> = ({ onOpenUserDashboard, onOpenAdmin
                   <li key={lIdx}>
                     <a 
                       href={link.href} 
-                      onClick={(e) => handleLinkClick(e, link.href)}
                       className="hover:text-[#6dff8a] transition-colors block py-0.5"
                     >
                       {link.name}
