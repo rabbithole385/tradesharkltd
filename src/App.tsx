@@ -24,10 +24,11 @@ import { AuthModal } from './components/AuthModal';
 import { AiChatDrawer } from './components/AiChatDrawer';
 import { UserDashboardModal } from './components/UserDashboardModal';
 import { AdminPortalModal } from './components/AdminPortalModal';
+import { QuickLoginsModal } from './components/QuickLoginsModal';
 
 import { Instrument, PopularInvestor } from './types';
 import { INSTRUMENTS } from './data/mockData';
-import { MessageSquare, ArrowUp, ArrowRight } from 'lucide-react';
+import { MessageSquare, ArrowUp, ArrowRight, Key } from 'lucide-react';
 import { useBrokerage } from './context/BrokerageContext';
 
 export default function App() {
@@ -35,6 +36,7 @@ export default function App() {
   const [isSearchOpen, setIsSearchOpen] = useState(false);
   const [isUserDashboardOpen, setIsUserDashboardOpen] = useState(false);
   const [isAdminPortalOpen, setIsAdminPortalOpen] = useState(false);
+  const [isQuickLoginsOpen, setIsQuickLoginsOpen] = useState(false);
   const [tradeInstrument, setTradeInstrument] = useState<Instrument | null>(null);
   const [copyInvestor, setCopyInvestor] = useState<PopularInvestor | null>(null);
   const [authModal, setAuthModal] = useState<{ isOpen: boolean; mode: 'login' | 'signup' }>({
@@ -84,6 +86,51 @@ export default function App() {
     window.location.hash = 'admin';
     setIsAdminPortalOpen(true);
     setIsUserDashboardOpen(false);
+  };
+
+  const handleDirectLoginUser = (email: string) => {
+    const matched = users.find(u => u.email.toLowerCase() === email.toLowerCase());
+    if (matched) {
+      const now = Date.now();
+      const session = {
+        userId: matched.id,
+        name: matched.name,
+        email: matched.email,
+        loginTime: now,
+        expiresAt: now + 24 * 60 * 60 * 1000,
+        sessionType: '24h'
+      };
+      localStorage.setItem('tradeshark_user_session', JSON.stringify(session));
+      sessionStorage.removeItem('tradeshark_user_session');
+      setCurrentUserId(matched.id);
+      setNotification(`Logged in as ${matched.name} (${matched.tier})`);
+      setTimeout(() => setNotification(null), 3500);
+      handleOpenUserDashboard();
+    }
+  };
+
+  const handleDirectLoginAdmin = (username: string) => {
+    const roleMap: Record<string, { role: string; name: string }> = {
+      admin: { role: 'Super-Admin', name: 'Administrator' },
+      compliance: { role: 'Compliance Officer', name: 'Compliance Desk' },
+      treasury: { role: 'Treasury Desk', name: 'Treasury Operator' }
+    };
+    const info = roleMap[username.toLowerCase()] || { role: 'Super-Admin', name: 'Administrator' };
+    const now = Date.now();
+    const session = {
+      username: username.toLowerCase(),
+      role: info.role,
+      name: info.name,
+      loginTime: now,
+      expiresAt: now + 24 * 60 * 60 * 1000,
+      sessionType: '24h',
+      token: `ts_adm_${Math.random().toString(36).substring(2)}${Date.now()}`
+    };
+    localStorage.setItem('tradeshark_admin_session', JSON.stringify(session));
+    sessionStorage.removeItem('tradeshark_admin_session');
+    setNotification(`Logged in as ${info.role} (${username})`);
+    setTimeout(() => setNotification(null), 3500);
+    handleOpenAdminPortal();
   };
 
   const handleCloseUserDashboard = () => {
@@ -172,6 +219,8 @@ export default function App() {
         onOpenSearch={() => setIsSearchOpen(true)}
         onOpenAuth={(mode) => setAuthModal({ isOpen: true, mode })}
         onOpenUserDashboard={handleOpenUserDashboard}
+        onOpenAdminPortal={handleOpenAdminPortal}
+        onOpenQuickLogins={() => setIsQuickLoginsOpen(true)}
         currentUser={currentUser}
       />
 
@@ -221,7 +270,10 @@ export default function App() {
       </main>
 
       {/* Footer */}
-      <Footer />
+      <Footer 
+        onOpenUserDashboard={handleOpenUserDashboard}
+        onOpenAdminPortal={handleOpenAdminPortal}
+      />
 
       {/* Floating AI Assistant Trigger Button */}
       <div className="fixed bottom-6 right-6 z-40 flex flex-col gap-3">
@@ -305,6 +357,16 @@ export default function App() {
         isOpen={isAdminPortalOpen}
         onClose={handleCloseAdminPortal}
         onSwitchToUserDashboard={handleOpenUserDashboard}
+      />
+
+      {/* Direct Logins & Access Credentials Directory Modal */}
+      <QuickLoginsModal
+        isOpen={isQuickLoginsOpen}
+        onClose={() => setIsQuickLoginsOpen(false)}
+        onDirectLoginUser={handleDirectLoginUser}
+        onDirectLoginAdmin={handleDirectLoginAdmin}
+        onOpenUserGate={handleOpenUserDashboard}
+        onOpenAdminGate={handleOpenAdminPortal}
       />
 
     </div>

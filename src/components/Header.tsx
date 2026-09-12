@@ -11,7 +11,9 @@ import {
   ShieldCheck,
   BookOpen,
   Building2,
-  Users
+  Users,
+  Key,
+  Lock
 } from 'lucide-react';
 import { TradeSharkLogo } from './TradeSharkLogo';
 
@@ -19,6 +21,8 @@ interface HeaderProps {
   onOpenSearch: () => void;
   onOpenAuth: (mode: 'login' | 'signup') => void;
   onOpenUserDashboard?: () => void;
+  onOpenAdminPortal?: () => void;
+  onOpenQuickLogins?: () => void;
   currentUser?: { name: string; email: string } | null;
 }
 
@@ -26,6 +30,8 @@ export const Header: React.FC<HeaderProps> = ({
   onOpenSearch, 
   onOpenAuth,
   onOpenUserDashboard,
+  onOpenAdminPortal,
+  onOpenQuickLogins,
   currentUser
 }) => {
   const [isScrolled, setIsScrolled] = useState(false);
@@ -310,6 +316,30 @@ export const Header: React.FC<HeaderProps> = ({
             )}
           </div>
 
+          {/* Quick Access: All Logins & Keys */}
+          {onOpenQuickLogins && (
+            <button
+              onClick={onOpenQuickLogins}
+              className="inline-flex items-center gap-1.5 px-3 py-1.5 text-xs font-bold text-[#6dff8a] bg-[#6dff8a]/10 hover:bg-[#6dff8a]/20 border border-[#6dff8a]/40 rounded-full transition-all cursor-pointer shadow-[0_0_12px_rgba(109,255,138,0.15)]"
+              title="View all demo accounts & passwords for Admin and User portals"
+            >
+              <Key className="w-3.5 h-3.5" />
+              <span>All Logins</span>
+            </button>
+          )}
+
+          {/* Direct Admin Portal Trigger */}
+          {onOpenAdminPortal && (
+            <button
+              onClick={onOpenAdminPortal}
+              className="hidden xl:inline-flex items-center gap-1.5 px-3 py-1.5 text-xs font-bold text-red-400 bg-red-500/10 hover:bg-red-500/20 border border-red-500/30 rounded-full transition-all cursor-pointer"
+              title="Open Back-Office Admin & Institutional Desk"
+            >
+              <Lock className="w-3.5 h-3.5" />
+              <span>Admin Desk</span>
+            </button>
+          )}
+
           <div className="h-5 w-px bg-white/15 hidden sm:block"></div>
 
           {/* Log In Button / User Avatar Button */}
@@ -380,6 +410,32 @@ export const Header: React.FC<HeaderProps> = ({
             </div>
 
             <div className="pt-4 flex flex-col gap-3">
+              {onOpenQuickLogins && (
+                <button 
+                  onClick={() => {
+                    setMobileMenuOpen(false);
+                    onOpenQuickLogins();
+                  }}
+                  className="w-full py-2.5 text-xs font-bold text-[#6dff8a] bg-[#6dff8a]/10 border border-[#6dff8a]/40 rounded-xl flex items-center justify-center gap-2"
+                >
+                  <Key className="w-3.5 h-3.5" />
+                  <span>View All Logins &amp; Access Keys</span>
+                </button>
+              )}
+
+              {onOpenAdminPortal && (
+                <button 
+                  onClick={() => {
+                    setMobileMenuOpen(false);
+                    onOpenAdminPortal();
+                  }}
+                  className="w-full py-2.5 text-xs font-bold text-red-400 bg-red-500/10 border border-red-500/30 rounded-xl flex items-center justify-center gap-2"
+                >
+                  <Lock className="w-3.5 h-3.5" />
+                  <span>Institutional Admin Portal</span>
+                </button>
+              )}
+
               <button 
                 onClick={() => {
                   setMobileMenuOpen(false);
