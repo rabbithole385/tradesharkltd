@@ -1,5 +1,5 @@
 import React, { useState, useEffect } from 'react';
-import { INSTRUMENTS } from '../data/mockData';
+import { useBrokerage } from '../context/BrokerageContext';
 import { Instrument } from '../types';
 import { Search, X, TrendingUp, TrendingDown, ArrowRight } from 'lucide-react';
 
@@ -15,6 +15,7 @@ export const SearchModal: React.FC<SearchModalProps> = ({
   onSelectInstrument 
 }) => {
   const [query, setQuery] = useState('');
+  const { instruments: INSTRUMENTS } = useBrokerage();
 
   useEffect(() => {
     const handleKeyDown = (e: KeyboardEvent) => {

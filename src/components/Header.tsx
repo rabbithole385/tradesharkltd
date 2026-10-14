@@ -16,6 +16,7 @@ import {
   Lock
 } from 'lucide-react';
 import { TradeSharkLogo } from './TradeSharkLogo';
+import { useBrokerage } from '../context/BrokerageContext';
 
 interface HeaderProps {
   onOpenSearch: () => void;
@@ -34,12 +35,12 @@ export const Header: React.FC<HeaderProps> = ({
   onOpenQuickLogins,
   currentUser
 }) => {
+  const { config } = useBrokerage();
   const [isScrolled, setIsScrolled] = useState(false);
   const [activeDropdown, setActiveDropdown] = useState<string | null>(null);
   const [mobileMenuOpen, setMobileMenuOpen] = useState(false);
   const [selectedLang, setSelectedLang] = useState('EN');
   const [langMenuOpen, setLangMenuOpen] = useState(false);
-  const [hasUserSession, setHasUserSession] = useState(false);
 
   useEffect(() => {
     const handleScroll = () => {
@@ -49,30 +50,7 @@ export const Header: React.FC<HeaderProps> = ({
     return () => window.removeEventListener('scroll', handleScroll);
   }, []);
 
-  useEffect(() => {
-    const checkSession = () => {
-      try {
-        const tab = sessionStorage.getItem('tradeshark_user_session');
-        const local = localStorage.getItem('tradeshark_user_session');
-        const active = tab || local;
-        if (active) {
-          const parsed = JSON.parse(active);
-          if (Date.now() < parsed.expiresAt) {
-            setHasUserSession(true);
-            return;
-          }
-        }
-      } catch (e) {}
-      setHasUserSession(false);
-    };
-    checkSession();
-    window.addEventListener('storage', checkSession);
-    const interval = setInterval(checkSession, 1500);
-    return () => {
-      window.removeEventListener('storage', checkSession);
-      clearInterval(interval);
-    };
-  }, [currentUser]);
+  const hasUserSession = !!currentUser;
 
   const languages = ['EN', 'ES', 'DE', 'FR', 'IT', 'NL', 'PT', 'AR'];
 
@@ -88,7 +66,7 @@ export const Header: React.FC<HeaderProps> = ({
       <div className="max-w-7xl mx-auto px-4 sm:px-6 lg:px-8 h-20 flex items-center justify-between">
         {/* Left Side: Brand Logo & Navigation */}
         <div className="flex items-center gap-8 lg:gap-10">
-          <a href="#" className="flex items-center group">
+          <a href="/" className="flex items-center group">
             <TradeSharkLogo size="md" showLtd={true} />
           </a>
 
@@ -115,12 +93,12 @@ export const Header: React.FC<HeaderProps> = ({
                         Markets
                       </span>
                       <ul className="space-y-2.5 text-sm text-[#d4d6cf]">
-                        <li><a href="#stocks" className="hover:text-[#6dff8a] transition-colors block">Stocks</a></li>
-                        <li><a href="#crypto" className="hover:text-[#6dff8a] transition-colors block">Crypto</a></li>
-                        <li><a href="#etfs" className="hover:text-[#6dff8a] transition-colors block">ETFs</a></li>
-                        <li><a href="#commodities" className="hover:text-[#6dff8a] transition-colors block">Commodities</a></li>
-                        <li><a href="#indices" className="hover:text-[#6dff8a] transition-colors block">Indices</a></li>
-                        <li><a href="#currencies" className="hover:text-[#6dff8a] transition-colors block">Currencies</a></li>
+                        <li><a href="/markets/stocks" className="hover:text-[#6dff8a] transition-colors block">Stocks</a></li>
+                        <li><a href="/markets/crypto" className="hover:text-[#6dff8a] transition-colors block">Crypto</a></li>
+                        <li><a href="/markets/etfs" className="hover:text-[#6dff8a] transition-colors block">ETFs</a></li>
+                        <li><a href="/markets/commodities" className="hover:text-[#6dff8a] transition-colors block">Commodities</a></li>
+                        <li><a href="/markets/indices" className="hover:text-[#6dff8a] transition-colors block">Indices</a></li>
+                        <li><a href="/markets/currencies" className="hover:text-[#6dff8a] transition-colors block">Currencies</a></li>
                       </ul>
                     </div>
 
@@ -129,11 +107,11 @@ export const Header: React.FC<HeaderProps> = ({
                         Trading
                       </span>
                       <ul className="space-y-2.5 text-sm text-[#d4d6cf]">
-                        <li><a href="#fees" className="hover:text-[#6dff8a] transition-colors block">Fees &amp; Margins</a></li>
-                        <li><a href="#hours" className="hover:text-[#6dff8a] transition-colors block">Market Hours</a></li>
-                        <li><a href="#cfd" className="hover:text-[#6dff8a] transition-colors block">CFD Trading</a></li>
-                        <li><a href="#futures" className="hover:text-[#6dff8a] transition-colors block">Futures</a></li>
-                        <li><a href="#pro-account" className="hover:text-[#6dff8a] transition-colors block">Professional Account</a></li>
+                        <li><a href="/fees" className="hover:text-[#6dff8a] transition-colors block">Fees &amp; Margins</a></li>
+                        <li><a href="/market-hours" className="hover:text-[#6dff8a] transition-colors block">Market Hours</a></li>
+                        <li><a href="/cfd-trading" className="hover:text-[#6dff8a] transition-colors block">CFD Trading</a></li>
+                        <li><a href="/futures" className="hover:text-[#6dff8a] transition-colors block">Futures</a></li>
+                        <li><a href="/professional-account" className="hover:text-[#6dff8a] transition-colors block">Professional Account</a></li>
                       </ul>
                     </div>
 
@@ -143,14 +121,14 @@ export const Header: React.FC<HeaderProps> = ({
                       </span>
                       <ul className="space-y-2.5 text-sm text-[#d4d6cf]">
                         <li>
-                          <a href="#copytrader" className="hover:text-[#6dff8a] transition-colors flex items-center justify-between">
+                          <a href="/copytrader" className="hover:text-[#6dff8a] transition-colors flex items-center justify-between">
                             <span>CopyTrader™</span>
                             <span className="text-[10px] bg-[#6dff8a]/20 text-[#6dff8a] px-1.5 py-0.5 rounded font-bold">HOT</span>
                           </a>
                         </li>
-                        <li><a href="#portfolios" className="hover:text-[#6dff8a] transition-colors block">Smart Portfolios</a></li>
-                        <li><a href="#recurring" className="hover:text-[#6dff8a] transition-colors block">Recurring Buys</a></li>
-                        <li><a href="#alpha" className="hover:text-[#6dff8a] transition-colors block">Alpha Portfolios</a></li>
+                        <li><a href="/smart-portfolios" className="hover:text-[#6dff8a] transition-colors block">Smart Portfolios</a></li>
+                        <li><a href="/recurring-investments" className="hover:text-[#6dff8a] transition-colors block">Recurring Buys</a></li>
+                        <li><a href="/alpha-portfolios" className="hover:text-[#6dff8a] transition-colors block">Alpha Portfolios</a></li>
                       </ul>
                     </div>
                   </div>
@@ -167,7 +145,7 @@ export const Header: React.FC<HeaderProps> = ({
               <button 
                 className="flex items-center gap-1.5 px-3.5 py-2 text-sm font-medium text-[#f4f4f0] hover:text-[#6dff8a] rounded-lg transition-colors"
               >
-                <span>Why TradeShark</span>
+                <span>Why {config.appName}</span>
                 <ChevronDown className={`w-4 h-4 transition-transform duration-200 ${activeDropdown === 'why' ? 'rotate-180 text-[#6dff8a]' : ''}`} />
               </button>
 
@@ -179,9 +157,9 @@ export const Header: React.FC<HeaderProps> = ({
                         AI Technology
                       </span>
                       <ul className="space-y-2.5 text-sm text-[#d4d6cf]">
-                        <li><a href="#shark-ai" className="hover:text-[#6dff8a] transition-colors block">Shark AI™</a></li>
-                        <li><a href="#agent-portfolios" className="hover:text-[#6dff8a] transition-colors block">Agent Portfolios</a></li>
-                        <li><a href="#ai-screener" className="hover:text-[#6dff8a] transition-colors block">Predictive Screener</a></li>
+                        <li><a href="/shark-ai" className="hover:text-[#6dff8a] transition-colors block">Shark AI™</a></li>
+                        <li><a href="/agent-portfolios" className="hover:text-[#6dff8a] transition-colors block">Agent Portfolios</a></li>
+                        <li><a href="/predictive-screener" className="hover:text-[#6dff8a] transition-colors block">Predictive Screener</a></li>
                       </ul>
                     </div>
 
@@ -190,9 +168,9 @@ export const Header: React.FC<HeaderProps> = ({
                         Signature
                       </span>
                       <ul className="space-y-2.5 text-sm text-[#d4d6cf]">
-                        <li><a href="#copytrader" className="hover:text-[#6dff8a] transition-colors block">CopyTrader™</a></li>
-                        <li><a href="#pro-investors" className="hover:text-[#6dff8a] transition-colors block">Pro Investors</a></li>
-                        <li><a href="#portfolios" className="hover:text-[#6dff8a] transition-colors block">Smart Portfolios</a></li>
+                        <li><a href="/copytrader" className="hover:text-[#6dff8a] transition-colors block">CopyTrader™</a></li>
+                        <li><a href="/popular-investors" className="hover:text-[#6dff8a] transition-colors block">Pro Investors</a></li>
+                        <li><a href="/smart-portfolios" className="hover:text-[#6dff8a] transition-colors block">Smart Portfolios</a></li>
                       </ul>
                     </div>
 
@@ -201,9 +179,9 @@ export const Header: React.FC<HeaderProps> = ({
                         Benefits
                       </span>
                       <ul className="space-y-2.5 text-sm text-[#d4d6cf]">
-                        <li><a href="#club" className="hover:text-[#6dff8a] transition-colors block">TradeShark Club</a></li>
-                        <li><a href="#interest" className="hover:text-[#6dff8a] transition-colors block">Interest on Cash</a></li>
-                        <li><a href="#protection" className="hover:text-[#6dff8a] transition-colors block">Account Protection</a></li>
+                        <li><a href="/club" className="hover:text-[#6dff8a] transition-colors block">{config.appName} Club</a></li>
+                        <li><a href="/interest-on-cash" className="hover:text-[#6dff8a] transition-colors block">Interest on Cash</a></li>
+                        <li><a href="/account-protection" className="hover:text-[#6dff8a] transition-colors block">Account Protection</a></li>
                       </ul>
                     </div>
                   </div>
@@ -228,11 +206,11 @@ export const Header: React.FC<HeaderProps> = ({
                 <div className="absolute left-0 top-full pt-2 w-[280px] animate-fadeIn">
                   <div className="bg-[#1b1e15] border border-white/10 rounded-2xl p-5 shadow-2xl backdrop-blur-xl">
                     <ul className="space-y-3 text-sm text-[#d4d6cf]">
-                      <li><a href="#academy" className="hover:text-[#6dff8a] transition-colors block">TradeShark Academy</a></li>
-                      <li><a href="#basics" className="hover:text-[#6dff8a] transition-colors block">Getting Started Guide</a></li>
-                      <li><a href="#insights" className="hover:text-[#6dff8a] transition-colors block">Market Analysis &amp; News</a></li>
-                      <li><a href="#earnings" className="hover:text-[#6dff8a] transition-colors block">Earnings Calendar</a></li>
-                      <li><a href="#digest" className="hover:text-[#6dff8a] transition-colors block">Daily Shark Digest</a></li>
+                      <li><a href="/academy" className="hover:text-[#6dff8a] transition-colors block">{config.appName} Academy</a></li>
+                      <li><a href="/getting-started" className="hover:text-[#6dff8a] transition-colors block">Getting Started Guide</a></li>
+                      <li><a href="/market-news" className="hover:text-[#6dff8a] transition-colors block">Market Analysis &amp; News</a></li>
+                      <li><a href="/earnings-calendar" className="hover:text-[#6dff8a] transition-colors block">Earnings Calendar</a></li>
+                      <li><a href="/daily-digest" className="hover:text-[#6dff8a] transition-colors block">Daily Shark Digest</a></li>
                     </ul>
                   </div>
                 </div>
@@ -256,12 +234,12 @@ export const Header: React.FC<HeaderProps> = ({
                 <div className="absolute left-0 top-full pt-2 w-[290px] animate-fadeIn">
                   <div className="bg-[#1b1e15] border border-white/10 rounded-2xl p-5 shadow-2xl backdrop-blur-xl">
                     <ul className="space-y-3 text-sm text-[#d4d6cf]">
-                      <li><a href="#about" className="hover:text-[#6dff8a] transition-colors block font-medium">About TradeShark Ltd</a></li>
-                      <li><a href="#support" className="hover:text-[#6dff8a] transition-colors block">24/7 Customer Support</a></li>
-                      <li><a href="#media" className="hover:text-[#6dff8a] transition-colors block">Media Center &amp; Press</a></li>
-                      <li><a href="#careers" className="hover:text-[#6dff8a] transition-colors block">Careers (We're Hiring)</a></li>
-                      <li><a href="#investors" className="hover:text-[#6dff8a] transition-colors block">Investor Relations</a></li>
-                      <li><a href="#risk" className="hover:text-[#6dff8a] transition-colors block text-xs text-white/50">Risk Disclosures</a></li>
+                      <li><a href="/about" className="hover:text-[#6dff8a] transition-colors block font-medium">About {config.legalName}</a></li>
+                      <li><a href="/help" className="hover:text-[#6dff8a] transition-colors block">24/7 Customer Support</a></li>
+                      <li><a href="/press" className="hover:text-[#6dff8a] transition-colors block">Media Center &amp; Press</a></li>
+                      <li><a href="/careers" className="hover:text-[#6dff8a] transition-colors block">Careers (We're Hiring)</a></li>
+                      <li><a href="/investor-relations" className="hover:text-[#6dff8a] transition-colors block">Investor Relations</a></li>
+                      <li><a href="/risk-disclosure" className="hover:text-[#6dff8a] transition-colors block text-xs text-white/50">Risk Disclosures</a></li>
                     </ul>
                   </div>
                 </div>
@@ -316,19 +294,6 @@ export const Header: React.FC<HeaderProps> = ({
             )}
           </div>
 
-          {/* Quick Access: All Logins & Keys */}
-          {onOpenQuickLogins && (
-            <button
-              onClick={onOpenQuickLogins}
-              className="inline-flex items-center gap-1.5 px-3 py-1.5 text-xs font-bold text-[#6dff8a] bg-[#6dff8a]/10 hover:bg-[#6dff8a]/20 border border-[#6dff8a]/40 rounded-full transition-all cursor-pointer shadow-[0_0_12px_rgba(109,255,138,0.15)]"
-              title="View all demo accounts & passwords for Admin and User portals"
-            >
-              <Key className="w-3.5 h-3.5" />
-              <span>All Logins</span>
-            </button>
-          )}
-
-          {/* Direct Admin Portal Trigger */}
           {onOpenAdminPortal && (
             <button
               onClick={onOpenAdminPortal}
@@ -391,38 +356,25 @@ export const Header: React.FC<HeaderProps> = ({
           <div className="space-y-4">
             <div className="font-semibold text-[#6dff8a] text-xs uppercase tracking-wider">Markets &amp; Trading</div>
             <div className="grid grid-cols-2 gap-2 text-sm text-white/80">
-              <a href="#stocks" onClick={() => setMobileMenuOpen(false)} className="p-2 hover:bg-white/5 rounded-lg">Stocks</a>
-              <a href="#crypto" onClick={() => setMobileMenuOpen(false)} className="p-2 hover:bg-white/5 rounded-lg">Crypto</a>
-              <a href="#etfs" onClick={() => setMobileMenuOpen(false)} className="p-2 hover:bg-white/5 rounded-lg">ETFs</a>
-              <a href="#commodities" onClick={() => setMobileMenuOpen(false)} className="p-2 hover:bg-white/5 rounded-lg">Commodities</a>
-              <a href="#copytrader" onClick={() => setMobileMenuOpen(false)} className="p-2 hover:bg-white/5 rounded-lg">CopyTrader™</a>
-              <a href="#shark-ai" onClick={() => setMobileMenuOpen(false)} className="p-2 hover:bg-white/5 rounded-lg">Shark AI</a>
+              <a href="/markets/stocks" onClick={() => setMobileMenuOpen(false)} className="p-2 hover:bg-white/5 rounded-lg">Stocks</a>
+              <a href="/markets/crypto" onClick={() => setMobileMenuOpen(false)} className="p-2 hover:bg-white/5 rounded-lg">Crypto</a>
+              <a href="/markets/etfs" onClick={() => setMobileMenuOpen(false)} className="p-2 hover:bg-white/5 rounded-lg">ETFs</a>
+              <a href="/markets/commodities" onClick={() => setMobileMenuOpen(false)} className="p-2 hover:bg-white/5 rounded-lg">Commodities</a>
+              <a href="/copytrader" onClick={() => setMobileMenuOpen(false)} className="p-2 hover:bg-white/5 rounded-lg">CopyTrader™</a>
+              <a href="/shark-ai" onClick={() => setMobileMenuOpen(false)} className="p-2 hover:bg-white/5 rounded-lg">Shark AI</a>
             </div>
 
             <div className="pt-3 border-t border-white/10">
               <div className="font-semibold text-[#6dff8a] text-xs uppercase tracking-wider mb-2">TradeShark Ltd</div>
               <div className="grid grid-cols-2 gap-2 text-sm text-white/80">
-                <a href="#about" onClick={() => setMobileMenuOpen(false)} className="p-2 hover:bg-white/5 rounded-lg">About Us</a>
-                <a href="#fees" onClick={() => setMobileMenuOpen(false)} className="p-2 hover:bg-white/5 rounded-lg">Zero Fees</a>
-                <a href="#safety" onClick={() => setMobileMenuOpen(false)} className="p-2 hover:bg-white/5 rounded-lg">Regulation</a>
-                <a href="#support" onClick={() => setMobileMenuOpen(false)} className="p-2 hover:bg-white/5 rounded-lg">Help Center</a>
+                <a href="/about" onClick={() => setMobileMenuOpen(false)} className="p-2 hover:bg-white/5 rounded-lg">About Us</a>
+                <a href="/fees" onClick={() => setMobileMenuOpen(false)} className="p-2 hover:bg-white/5 rounded-lg">Zero Fees</a>
+                <a href="/regulation" onClick={() => setMobileMenuOpen(false)} className="p-2 hover:bg-white/5 rounded-lg">Regulation</a>
+                <a href="/help" onClick={() => setMobileMenuOpen(false)} className="p-2 hover:bg-white/5 rounded-lg">Help Center</a>
               </div>
             </div>
 
             <div className="pt-4 flex flex-col gap-3">
-              {onOpenQuickLogins && (
-                <button 
-                  onClick={() => {
-                    setMobileMenuOpen(false);
-                    onOpenQuickLogins();
-                  }}
-                  className="w-full py-2.5 text-xs font-bold text-[#6dff8a] bg-[#6dff8a]/10 border border-[#6dff8a]/40 rounded-xl flex items-center justify-center gap-2"
-                >
-                  <Key className="w-3.5 h-3.5" />
-                  <span>View All Logins &amp; Access Keys</span>
-                </button>
-              )}
-
               {onOpenAdminPortal && (
                 <button 
                   onClick={() => {
@@ -439,11 +391,11 @@ export const Header: React.FC<HeaderProps> = ({
               <button 
                 onClick={() => {
                   setMobileMenuOpen(false);
-                  onOpenAuth('login');
+                  if (currentUser && onOpenUserDashboard) onOpenUserDashboard(); else onOpenAuth('login');
                 }}
                 className="w-full py-3 text-sm font-semibold text-white border border-white/20 rounded-full"
               >
-                Log in
+                {currentUser ? `My Portal (${currentUser.name})` : 'Log in'}
               </button>
               <button 
                 onClick={() => {

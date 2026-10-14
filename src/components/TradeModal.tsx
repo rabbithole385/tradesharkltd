@@ -1,29 +1,48 @@
 import React, { useState } from 'react';
 import { Instrument } from '../types';
+import { useBrokerage } from '../context/BrokerageContext';
+import { errMsg } from '../lib/api';
 import { X, CheckCircle2, TrendingUp, TrendingDown, DollarSign, ShieldAlert, ArrowRight } from 'lucide-react';
 
 interface TradeModalProps {
   instrument: Instrument | null;
   onClose: () => void;
+  onRequireAuth?: () => void;
+  onOpenPortal?: (tab?: string) => void;
 }
 
-export const TradeModal: React.FC<TradeModalProps> = ({ instrument, onClose }) => {
-  if (!instrument) return null;
+export const TradeModal: React.FC<TradeModalProps> = (props) => (props.instrument ? <TradeModalInner {...props} instrument={props.instrument} /> : null);
+
+const TradeModalInner: React.FC<TradeModalProps & { instrument: Instrument }> = ({ instrument: initial, onClose, onRequireAuth, onOpenPortal }) => {
+  const { instruments, currentUser, openPosition } = useBrokerage();
+  const instrument = instruments.find(i => i.symbol === initial.symbol) || initial;
 
   const [tradeType, setTradeType] = useState<'BUY' | 'SELL'>('BUY');
   const [amount, setAmount] = useState(100);
-  const [orderPlaced, setOrderPlaced] = useState(false);
+  const [orderPlaced, setOrderPlaced] = useState<null | { units: string; price: number }>(null);
   const [useLeverage, setUseLeverage] = useState<'X1' | 'X2' | 'X5'>('X1');
+  const [error, setError] = useState<string | null>(null);
+  const [busy, setBusy] = useState(false);
 
   const units = (amount / instrument.price).toFixed(4);
   const isPositive = instrument.deltaPercent >= 0;
 
-  const handleOrder = (e: React.FormEvent) => {
+  const handleOrder = async (e: React.FormEvent) => {
     e.preventDefault();
-    setOrderPlaced(true);
-    setTimeout(() => {
-      // Auto dismiss after 2.5s
-    }, 2500);
+    setError(null);
+    if (!currentUser) {
+      onRequireAuth?.();
+      return;
+    }
+    setBusy(true);
+    try {
+      const pos = await openPosition(instrument.symbol, tradeType, amount, Number(useLeverage.slice(1)));
+      setOrderPlaced({ units: pos.units, price: pos.entryPrice });
+    } catch (err) {
+      setError(errMsg(err));
+    } finally {
+      setBusy(false);
+    }
   };
 
   return (
@@ -47,14 +66,17 @@ export const TradeModal: React.FC<TradeModalProps> = ({ instrument, onClose }) =
             </div>
             <h3 className="text-2xl font-bold text-white">Order Executed</h3>
             <p className="text-sm text-[#a3a89e]">
-              Successfully simulated {tradeType} order of <strong>${amount.toLocaleString()}</strong> in {instrument.symbol} ({units} units) with TradeShark Ltd.
+              Your {tradeType} order of <strong>${amount.toLocaleString()}</strong> in {instrument.symbol} ({orderPlaced.units} units @ ${orderPlaced.price.toLocaleString()}) was executed. A confirmation email is on its way.
             </p>
-            <div className="pt-4">
+            <div className="pt-4 grid grid-cols-2 gap-2">
               <button
-                onClick={() => {
-                  setOrderPlaced(false);
-                  onClose();
-                }}
+                onClick={() => onOpenPortal?.('positions')}
+                className="w-full py-3 rounded-full border border-white/20 text-white font-bold text-sm"
+              >
+                View positions
+              </button>
+              <button
+                onClick={() => { setOrderPlaced(null); onClose(); }}
                 className="w-full py-3 rounded-full bg-[#6dff8a] text-[#15170f] font-bold text-sm"
               >
                 Done
@@ -188,16 +210,24 @@ export const TradeModal: React.FC<TradeModalProps> = ({ instrument, onClose }) =
               <span className="text-[#6dff8a] font-bold font-mono">$0.00 (Commission Free)</span>
             </div>
 
+            {error && (
+              <div className="p-3 rounded-xl bg-red-500/10 border border-red-500/30 text-xs text-red-300">{error}</div>
+            )}
+            {currentUser && (
+              <div className="text-[11px] text-white/50 flex justify-between"><span>Available balance</span><span className="font-mono text-white">${currentUser.realBalance.toLocaleString(undefined, { minimumFractionDigits: 2 })}</span></div>
+            )}
+
             {/* Submit CTA */}
             <button
               type="submit"
+              disabled={busy}
               className={`w-full py-4 rounded-full font-bold text-base flex items-center justify-center gap-2 shadow-lg transition-all transform hover:scale-[1.01] active:scale-[0.99] ${
                 tradeType === 'BUY'
                   ? 'bg-[#6dff8a] hover:bg-[#5ce077] text-[#15170f] shadow-[#6dff8a]/20'
                   : 'bg-[#ff5c5c] hover:bg-[#ff4747] text-white shadow-[#ff5c5c]/20'
               }`}
             >
-              <span>Place {tradeType} Order</span>
+              <span>{!currentUser ? 'Log in to Trade' : busy ? 'Executing...' : `Place ${tradeType} Order`}</span>
               <ArrowRight className="w-4 h-4" />
             </button>
           </form>

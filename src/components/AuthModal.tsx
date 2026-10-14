@@ -1,7 +1,10 @@
 import React, { useState } from 'react';
 import { X, CheckCircle2, Lock, Mail, ArrowRight, ShieldCheck, AlertCircle, Eye, EyeOff } from 'lucide-react';
 import { TradeSharkLogo } from './TradeSharkLogo';
-import { useBrokerage } from '../context/BrokerageContext';
+import { useBrokerage, isLoginChallenge, LoginChallenge } from '../context/BrokerageContext';
+import { OtpStep } from './OtpStep';
+import { errMsg } from '../lib/api';
+import { navigate } from '../lib/router';
 
 interface AuthModalProps {
   isOpen: boolean;
@@ -10,142 +13,51 @@ interface AuthModalProps {
   onSuccess: (user: { name: string; email: string }) => void;
 }
 
-export const AuthModal: React.FC<AuthModalProps> = ({ 
-  isOpen, 
+export const AuthModal: React.FC<AuthModalProps> = (props) => (props.isOpen ? <AuthModalInner {...props} /> : null);
+
+const AuthModalInner: React.FC<AuthModalProps> = ({ 
   mode: initialMode, 
   onClose,
   onSuccess
 }) => {
-  if (!isOpen) return null;
-
-  const { users, createUser, setCurrentUserId } = useBrokerage();
+  const { loginUser, registerUser, config } = useBrokerage();
 
   const [mode, setMode] = useState<'login' | 'signup'>(initialMode);
   const [email, setEmail] = useState('');
   const [password, setPassword] = useState('');
   const [showPassword, setShowPassword] = useState(false);
   const [fullName, setFullName] = useState('');
-  const [rememberMe, setRememberMe] = useState(false);
-  const [agreed, setAgreed] = useState(true);
+  const [rememberMe, setRememberMe] = useState(true);
+  const [agreed, setAgreed] = useState(false);
   const [submitted, setSubmitted] = useState(false);
   const [errorMessage, setErrorMessage] = useState<string | null>(null);
   const [isLoading, setIsLoading] = useState(false);
+  const [otp, setOtp] = useState<LoginChallenge | null>(null);
 
-  const handleSubmit = (e: React.FormEvent) => {
+  const finish = (user: { name: string; email: string }) => {
+    setOtp(null);
+    setSubmitted(true);
+    setTimeout(() => {
+      onSuccess({ name: user.name, email: user.email });
+      onClose();
+    }, 600);
+  };
+
+  const handleSubmit = async (e: React.FormEvent) => {
     e.preventDefault();
     setErrorMessage(null);
     setIsLoading(true);
-
-    setTimeout(() => {
-      const searchEmail = email.trim().toLowerCase();
-
-      if (mode === 'login') {
-        // Look up in data system
-        const foundUser = users.find(u => 
-          u.email.toLowerCase() === searchEmail || 
-          u.name.toLowerCase() === searchEmail ||
-          u.id.toLowerCase() === searchEmail
-        );
-
-        if (!foundUser) {
-          setIsLoading(false);
-          setErrorMessage('Account details not found in the TradeShark data system. Please check your email or create a trading account.');
-          return;
-        }
-
-        if (foundUser.password && foundUser.password !== password) {
-          setIsLoading(false);
-          setErrorMessage('Incorrect password. Please verify your credentials and try again.');
-          return;
-        }
-
-        if (foundUser.status === 'Suspended') {
-          setIsLoading(false);
-          setErrorMessage('This account is currently suspended by compliance.');
-          return;
-        }
-
-        const now = Date.now();
-        const expiresAt = rememberMe ? now + 24 * 60 * 60 * 1000 : now + 8 * 60 * 60 * 1000;
-        const session = {
-          userId: foundUser.id,
-          name: foundUser.name,
-          email: foundUser.email,
-          loginTime: now,
-          expiresAt,
-          sessionType: rememberMe ? '24h' : 'tab'
-        };
-
-        if (rememberMe) {
-          localStorage.setItem('tradeshark_user_session', JSON.stringify(session));
-          sessionStorage.removeItem('tradeshark_user_session');
-        } else {
-          sessionStorage.setItem('tradeshark_user_session', JSON.stringify(session));
-          localStorage.removeItem('tradeshark_user_session');
-        }
-
-        setCurrentUserId(foundUser.id);
-        setIsLoading(false);
-        setSubmitted(true);
-        setTimeout(() => {
-          onSuccess({ name: foundUser.name, email: foundUser.email });
-          onClose();
-        }, 600);
-
-      } else {
-        // Sign up
-        if (users.some(u => u.email.toLowerCase() === searchEmail)) {
-          setIsLoading(false);
-          setErrorMessage('An account with this email address already exists. Please log in instead.');
-          return;
-        }
-
-        const newUser = createUser({
-          name: fullName.trim() || 'New Trader',
-          email: searchEmail,
-          password,
-          phone: '+44 20 7946 0912',
-          country: 'United Kingdom',
-          tier: 'Tier 1 - Standard',
-          currency: 'USD',
-          realBalance: 5000,
-          virtualBalance: 100000,
-          kycStatus: 'Pending',
-          kycDocType: 'Passport',
-          kycDocNumber: `REG-${Math.floor(100000 + Math.random() * 900000)}`,
-          kycSubmittedDate: new Date().toISOString().substring(0, 16).replace('T', ' '),
-          amlRisk: 'Low',
-          pepWatchlistHit: false,
-          status: 'Active',
-          role: 'Trader',
-          leverage: 30,
-          allowTrading: true,
-          allowShorting: false,
-          allowCrypto: true,
-          maxPositionLimit: 50000,
-          accountManager: 'David Sterling'
-        });
-
-        const now = Date.now();
-        const session = {
-          userId: newUser.id,
-          name: newUser.name,
-          email: newUser.email,
-          loginTime: now,
-          expiresAt: now + 24 * 60 * 60 * 1000,
-          sessionType: '24h'
-        };
-
-        localStorage.setItem('tradeshark_user_session', JSON.stringify(session));
-        setCurrentUserId(newUser.id);
-        setIsLoading(false);
-        setSubmitted(true);
-        setTimeout(() => {
-          onSuccess({ name: newUser.name, email: newUser.email });
-          onClose();
-        }, 600);
-      }
-    }, 400);
+    try {
+      const r = mode === 'login'
+        ? await loginUser(email.trim(), password, rememberMe)
+        : await registerUser({ name: fullName.trim(), email: email.trim(), password });
+      if (isLoginChallenge(r)) { setOtp(r); return; }
+      finish(r);
+    } catch (err) {
+      setErrorMessage(errMsg(err));
+    } finally {
+      setIsLoading(false);
+    }
   };
 
   return (
@@ -188,27 +100,29 @@ export const AuthModal: React.FC<AuthModalProps> = ({
                 <span className="text-[#6dff8a] font-mono font-bold">&lt; 1.2ms</span>
               </div>
               <div className="flex items-center justify-between text-xs">
-                <span className="text-white/60">Global Client Assets</span>
-                <span className="text-white font-mono font-bold">$842M+</span>
+                <span className="text-white/60">Markets Available</span>
+                <span className="text-white font-mono font-bold">Stocks • Crypto • FX</span>
               </div>
               <div className="flex items-center justify-between text-xs">
-                <span className="text-white/60">Tier-1 Regulatory Escrow</span>
+                <span className="text-white/60">Account Security</span>
                 <span className="text-yellow-400 font-bold flex items-center gap-1">
                   <ShieldCheck className="w-3.5 h-3.5" />
-                  <span>FCA / CySEC</span>
+                  <span>KYC Verified</span>
                 </span>
               </div>
             </div>
 
             <p className="text-[11px] text-white/50 leading-relaxed">
-              Trade over 5,000 global stocks, forex pairs, indices, and crypto with institutional zero-spread matching.
+              Trade over 5,000 global stocks, forex pairs, indices, and crypto from one account.
             </p>
           </div>
         </div>
 
         {/* Right Side: Form Content */}
         <div className="flex-1 p-6 sm:p-8 md:p-9 flex flex-col justify-center bg-[#14170e]">
-          {submitted ? (
+          {otp && !submitted ? (
+            <OtpStep challenge={otp} onVerified={finish} onCancel={() => { setOtp(null); setPassword(''); }} />
+          ) : submitted ? (
             <div className="py-12 text-center space-y-4">
               <div className="w-16 h-16 rounded-full bg-[#6dff8a]/20 text-[#6dff8a] flex items-center justify-center mx-auto">
                 <CheckCircle2 className="w-10 h-10" />
@@ -231,7 +145,7 @@ export const AuthModal: React.FC<AuthModalProps> = ({
                 </h3>
                 <p className="text-xs text-[#a3a89e]">
                   {mode === 'signup' 
-                    ? 'Join 40M+ investors trading stocks, crypto, and ETFs.' 
+                    ? 'Start trading stocks, crypto, and ETFs today.' 
                     : 'Access your portfolio, live watchlists, and CopyTrader™.'}
                 </p>
               </div>
@@ -284,6 +198,7 @@ export const AuthModal: React.FC<AuthModalProps> = ({
                       type={showPassword ? 'text' : 'password'}
                       required
                       autoComplete={mode === 'signup' ? 'new-password' : 'current-password'}
+                      minLength={mode === 'signup' ? 8 : undefined}
                       value={password}
                       onChange={(e) => setPassword(e.target.value)}
                       className="w-full bg-black/40 border border-white/10 rounded-xl pl-9 pr-9 py-2.5 text-xs text-white focus:outline-none focus:border-[#6dff8a]"
@@ -306,8 +221,13 @@ export const AuthModal: React.FC<AuthModalProps> = ({
                       onChange={(e) => setRememberMe(e.target.checked)}
                       className="rounded bg-black/40 border-white/20 text-[#6dff8a] focus:ring-0 cursor-pointer"
                     />
-                    <span>Remember session (24h)</span>
+                    <span>Keep me signed in</span>
                   </label>
+                )}
+                {mode === 'login' && (
+                  <button type="button" onClick={() => { onClose(); navigate('/forgot-password'); }} className="text-xs text-[#6dff8a] hover:underline">
+                    Forgot password?
+                  </button>
                 )}
 
                 {mode === 'signup' && (
@@ -320,7 +240,7 @@ export const AuthModal: React.FC<AuthModalProps> = ({
                       className="accent-[#6dff8a] w-3.5 h-3.5 mt-0.5"
                     />
                     <span>
-                      I confirm I have read and agree to the <strong>TradeShark Ltd Terms of Service</strong> and Risk Disclosures.
+                      I confirm I have read and agree to the <a href="/terms" target="_blank" className="text-[#6dff8a] underline">{config.legalName} Terms</a>, <a href="/privacy" target="_blank" className="text-[#6dff8a] underline">Privacy Policy</a> and <a href="/risk-disclosure" target="_blank" className="text-[#6dff8a] underline">Risk Disclosures</a>.
                     </span>
                   </label>
                 )}
@@ -340,36 +260,6 @@ export const AuthModal: React.FC<AuthModalProps> = ({
                   )}
                 </button>
               </form>
-
-              {/* Demo Accounts Quick-Fill Helper for Login */}
-              {mode === 'login' && (
-                <div className="pt-2 border-t border-white/10 space-y-1.5">
-                  <div className="flex items-center justify-between text-[11px] text-white/60">
-                    <span className="font-semibold text-white/80">Available Accounts:</span>
-                    <span className="text-[10px] text-[#6dff8a]">Click to autofill</span>
-                  </div>
-                  <div className="grid grid-cols-2 gap-1.5">
-                    {[
-                      { name: 'Alex Mercer (Pro)', email: 'alex.m@gmail.com', pass: 'trader123' },
-                      { name: 'Sarah Jenkins (VIP)', email: 'sjenkins@techcorp.io', pass: 'vip123' }
-                    ].map((acc, i) => (
-                      <button
-                        key={i}
-                        type="button"
-                        onClick={() => {
-                          setEmail(acc.email);
-                          setPassword(acc.pass);
-                          setErrorMessage(null);
-                        }}
-                        className="p-1.5 rounded-lg bg-black/40 border border-white/10 hover:border-[#6dff8a]/40 text-left transition-all text-xs"
-                      >
-                        <div className="font-semibold text-white text-[11px] truncate">{acc.name}</div>
-                        <div className="text-[10px] text-[#6dff8a] font-mono truncate">{acc.email}</div>
-                      </button>
-                    ))}
-                  </div>
-                </div>
-              )}
 
               {/* Toggle login / signup */}
               <div className="text-center text-xs text-[#a3a89e] pt-1">

@@ -1,4 +1,4 @@
-import React, { useState } from 'react';
+import React, { useState, useRef, useEffect } from 'react';
 import { 
   ShieldCheck, 
   CheckCircle2, 
@@ -19,77 +19,119 @@ import {
 } from 'lucide-react';
 import { useBrokerage } from '../../context/BrokerageContext';
 import { UserAccount, KycSubmissionPayload } from '../../types';
+import { errMsg } from '../../lib/api';
+import { COUNTRIES } from '../../data/countries';
 
 interface UserKycTabProps {
   currentUser: UserAccount;
   onNotify: (msg: string) => void;
 }
 
-export const UserKycTab: React.FC<UserKycTabProps> = ({ currentUser, onNotify }) => {
-  const { submitKycApplication } = useBrokerage();
+type DocKind = 'front' | 'back' | 'proof' | 'selfie';
 
-  // Wizard Step: 1 = Personal Details, 2 = ID Doc, 3 = Proof of Address, 4 = Biometric Selfie
+export const UserKycTab: React.FC<UserKycTabProps> = ({ currentUser, onNotify }) => {
+  const { submitKycApplication, uploadKycFile } = useBrokerage();
+
+  // Wizard Step: 1 = Personal Details, 2 = ID Doc, 3 = Proof of Address, 4 = Selfie
   const [step, setStep] = useState<1 | 2 | 3 | 4>(1);
 
-  // Form State
+  // Form State (pre-filled from the account where available)
   const [fullName, setFullName] = useState(currentUser.name || '');
-  const [dateOfBirth, setDateOfBirth] = useState(currentUser.dateOfBirth || '1988-05-14');
-  const [nationality, setNationality] = useState(currentUser.country || 'United Kingdom');
-  const [streetAddress, setStreetAddress] = useState(currentUser.streetAddress || '42 Kensington Church Street');
-  const [city, setCity] = useState(currentUser.city || 'London');
-  const [postalCode, setPostalCode] = useState(currentUser.postalCode || 'W8 4DB');
+  const [dateOfBirth, setDateOfBirth] = useState(currentUser.dateOfBirth || '');
+  const [nationality, setNationality] = useState(currentUser.country || '');
+  const [streetAddress, setStreetAddress] = useState(currentUser.streetAddress || '');
+  const [city, setCity] = useState(currentUser.city || '');
+  const [postalCode, setPostalCode] = useState(currentUser.postalCode || '');
 
   const [docType, setDocType] = useState<KycSubmissionPayload['docType']>(
     (currentUser.kycDocType as any) || 'Passport'
   );
-  const [docNumber, setDocNumber] = useState(currentUser.kycDocNumber || 'GB-94821039');
-  const [docExpiryDate, setDocExpiryDate] = useState('2032-11-20');
-  const [docFrontName, setDocFrontName] = useState(currentUser.kycDocFrontName || 'passport_photo_page.jpg');
-  const [docBackName, setDocBackName] = useState(currentUser.kycDocBackName || 'passport_mrz_page.jpg');
+  const [docNumber, setDocNumber] = useState(currentUser.kycDocNumber || '');
+  const [docExpiryDate, setDocExpiryDate] = useState(currentUser.kycExpiryDate || '');
+  const [docFrontName, setDocFrontName] = useState(currentUser.kycFileIds?.front ? (currentUser.kycDocFrontName || 'Uploaded') : '');
+  const [docBackName, setDocBackName] = useState(currentUser.kycFileIds?.back ? (currentUser.kycDocBackName || 'Uploaded') : '');
+  const [proofAddressName, setProofAddressName] = useState(currentUser.kycFileIds?.proof ? (currentUser.kycProofAddressName || 'Uploaded') : '');
+  const [uploading, setUploading] = useState<DocKind | null>(null);
+  const [submitting, setSubmitting] = useState(false);
 
-  const [proofAddressName, setProofAddressName] = useState(
-    currentUser.kycProofAddressName || 'barclays_bank_statement_aug2026.pdf'
-  );
-
-  // Biometric scanner state
+  // Selfie capture state
   const [isScanning, setIsScanning] = useState(false);
-  const [selfieTaken, setSelfieTaken] = useState(currentUser.kycSelfieVerified || false);
+  const [selfieTaken, setSelfieTaken] = useState(!!currentUser.kycFileIds?.selfie);
+  const [selfiePreview, setSelfiePreview] = useState<string | null>(currentUser.kycFileIds?.selfie ? `/api/me/files/${currentUser.kycFileIds.selfie}` : null);
+  const videoRef = useRef<HTMLVideoElement>(null);
+  const streamRef = useRef<MediaStream | null>(null);
+  const selfieInputRef = useRef<HTMLInputElement>(null);
 
-  const handleStartBiometricScan = () => {
-    setIsScanning(true);
-    setTimeout(() => {
-      setIsScanning(false);
-      setSelfieTaken(true);
-      onNotify('Biometric liveness verification completed (98.8% match)!');
-    }, 2200);
+  useEffect(() => () => { streamRef.current?.getTracks().forEach(t => t.stop()); }, []);
+
+  const doUpload = async (kind: DocKind, file: File | Blob, filename?: string) => {
+    setUploading(kind);
+    try {
+      const r = await uploadKycFile(kind, file, filename);
+      if (kind === 'front') setDocFrontName(r.filename);
+      if (kind === 'back') setDocBackName(r.filename);
+      if (kind === 'proof') setProofAddressName(r.filename);
+      if (kind === 'selfie') { setSelfieTaken(true); setSelfiePreview(URL.createObjectURL(file)); }
+      onNotify(`${kind === 'selfie' ? 'Selfie' : 'Document'} uploaded successfully`);
+    } catch (err) {
+      onNotify(errMsg(err));
+    } finally {
+      setUploading(null);
+    }
   };
 
-  const handleSubmitKyc = (e: React.FormEvent) => {
-    e.preventDefault();
-    if (!selfieTaken) {
-      onNotify('Please complete the biometric face scan in Step 4 before submitting');
-      setStep(4);
-      return;
+  const onPick = (kind: DocKind) => (e: React.ChangeEvent<HTMLInputElement>) => {
+    const f = e.target.files?.[0];
+    if (f) doUpload(kind, f);
+    e.target.value = '';
+  };
+
+  const handleStartBiometricScan = async () => {
+    if (!navigator.mediaDevices?.getUserMedia) { selfieInputRef.current?.click(); return; }
+    try {
+      const stream = await navigator.mediaDevices.getUserMedia({ video: { facingMode: 'user' }, audio: false });
+      streamRef.current = stream;
+      setIsScanning(true);
+      setTimeout(() => { if (videoRef.current) { videoRef.current.srcObject = stream; videoRef.current.play().catch(() => undefined); } }, 50);
+    } catch {
+      onNotify('Camera not available - please upload a selfie photo instead.');
+      selfieInputRef.current?.click();
     }
+  };
 
-    submitKycApplication({
-      userId: currentUser.id,
-      fullName,
-      dateOfBirth,
-      nationality,
-      streetAddress,
-      city,
-      postalCode,
-      docType,
-      docNumber,
-      docExpiryDate,
-      docFrontName,
-      docBackName,
-      proofAddressName,
-      selfieTaken: true
-    });
+  const captureSelfie = () => {
+    const v = videoRef.current;
+    if (!v) return;
+    const canvas = document.createElement('canvas');
+    canvas.width = v.videoWidth || 640;
+    canvas.height = v.videoHeight || 480;
+    canvas.getContext('2d')!.drawImage(v, 0, 0, canvas.width, canvas.height);
+    streamRef.current?.getTracks().forEach(t => t.stop());
+    streamRef.current = null;
+    setIsScanning(false);
+    canvas.toBlob(blob => { if (blob) doUpload('selfie', blob, 'selfie.jpg'); }, 'image/jpeg', 0.9);
+  };
 
-    onNotify('KYC verification package submitted! Compliance review initiated.');
+  const handleSubmitKyc = async (e: React.FormEvent) => {
+    e.preventDefault();
+    if (!docFrontName) { onNotify('Please upload the front of your identity document'); setStep(2); return; }
+    if (!proofAddressName) { onNotify('Please upload your proof of address'); setStep(3); return; }
+    if (!selfieTaken) { onNotify('Please take or upload a selfie in Step 4'); setStep(4); return; }
+    setSubmitting(true);
+    try {
+      await submitKycApplication({
+        userId: currentUser.id,
+        fullName, dateOfBirth, nationality, streetAddress, city, postalCode,
+        docType, docNumber, docExpiryDate, docFrontName, docBackName, proofAddressName,
+        selfieTaken: true,
+      });
+      onNotify('Verification package submitted! You will be notified by email once reviewed.');
+      setStep(1);
+    } catch (err) {
+      onNotify(errMsg(err));
+    } finally {
+      setSubmitting(false);
+    }
   };
 
   return (
@@ -119,7 +161,7 @@ export const UserKycTab: React.FC<UserKycTabProps> = ({ currentUser, onNotify })
             <div className="flex items-center gap-2">
               <h3 className="text-base font-bold">
                 {currentUser.kycStatus === 'Approved' 
-                  ? 'FCA Tier 2 - Verified Pro Certified' 
+                  ? `Identity Verified - ${currentUser.tier}` 
                   : currentUser.kycStatus === 'Action Required'
                   ? 'Compliance Action Required: Document Resubmission'
                   : currentUser.kycStatus === 'Pending' || currentUser.kycStatus === 'Under Review'
@@ -139,20 +181,20 @@ export const UserKycTab: React.FC<UserKycTabProps> = ({ currentUser, onNotify })
 
             <p className="text-xs text-white/70 mt-1">
               {currentUser.kycStatus === 'Approved'
-                ? `Account certified on ${currentUser.kycSubmittedDate || '2026-09-09'} under UK FCA Client Money & AML Rules. Max leverage: 1:${currentUser.leverage}.`
+                ? `Identity verified${currentUser.kycSubmittedDate ? ` (submitted ${currentUser.kycSubmittedDate})` : ''}. Max leverage: 1:${currentUser.leverage}.`
                 : currentUser.kycStatus === 'Action Required'
                 ? `Compliance Note: ${currentUser.kycNotes || 'Please upload an updated proof of residence dated within 90 days.'}`
                 : currentUser.kycStatus === 'Pending' || currentUser.kycStatus === 'Under Review'
-                ? 'Your submitted identity artifacts are queued in our compliance desk. Review turnaround is typically within 15 minutes.'
-                : 'Complete regulatory identity verification to unlock live market trading and high-volume deposits.'}
+                ? 'Your submitted identity artifacts are queued in our compliance desk. Review is typically completed within one business day.'
+                : 'Complete identity verification to unlock live market trading and high-volume deposits.'}
             </p>
           </div>
         </div>
 
         {currentUser.kycStatus === 'Approved' && (
           <div className="text-right">
-            <span className="text-[10px] font-mono text-[#6dff8a] block">CERTIFICATE ID</span>
-            <span className="font-mono font-bold text-xs text-white">TS-FCA-2026-89104</span>
+            <span className="text-[10px] font-mono text-[#6dff8a] block">CLIENT ID</span>
+            <span className="font-mono font-bold text-xs text-white">{currentUser.id}</span>
           </div>
         )}
       </div>
@@ -232,13 +274,15 @@ export const UserKycTab: React.FC<UserKycTabProps> = ({ currentUser, onNotify })
 
               <div>
                 <label className="text-white/70 block mb-1">Nationality / Country of Tax Residence</label>
-                <input
-                  type="text"
+                <select
                   value={nationality}
                   onChange={(e) => setNationality(e.target.value)}
                   className="w-full bg-black/50 border border-white/15 rounded-xl px-3 py-2 text-white focus:outline-none focus:border-[#6dff8a]"
                   required
-                />
+                >
+                  <option value="">Select country...</option>
+                  {COUNTRIES.map(c => <option key={c} value={c}>{c}</option>)}
+                </select>
               </div>
 
               <div className="sm:col-span-2">
@@ -278,7 +322,10 @@ export const UserKycTab: React.FC<UserKycTabProps> = ({ currentUser, onNotify })
             <div className="flex justify-end pt-4">
               <button
                 type="button"
-                onClick={() => setStep(2)}
+                onClick={() => {
+                  if (!fullName.trim() || !dateOfBirth || !nationality || !streetAddress.trim() || !city.trim()) { onNotify('Please complete all required profile fields'); return; }
+                  setStep(2);
+                }}
                 className="flex items-center gap-2 px-5 py-2.5 rounded-xl bg-[#6dff8a] text-[#15170f] font-bold text-xs hover:bg-[#5ce077]"
               >
                 <span>Continue to Document Upload</span>
@@ -336,26 +383,40 @@ export const UserKycTab: React.FC<UserKycTabProps> = ({ currentUser, onNotify })
             {/* Document Upload Dropzones */}
             <div className="grid grid-cols-1 sm:grid-cols-2 gap-4 pt-2">
               {/* Front Page */}
-              <div className="p-4 rounded-2xl bg-black/40 border-2 border-dashed border-white/20 hover:border-[#6dff8a]/50 text-center space-y-2 transition-colors">
+              <label className="p-4 rounded-2xl bg-black/40 border-2 border-dashed border-white/20 hover:border-[#6dff8a]/50 text-center space-y-2 transition-colors cursor-pointer flex flex-col items-center justify-center">
+                <input type="file" accept="image/*,application/pdf" className="hidden" onChange={onPick('front')} />
                 <Upload className="w-6 h-6 text-[#6dff8a] mx-auto" />
                 <div className="text-xs font-bold text-white">Upload Front Photo / Scanned Page</div>
                 <p className="text-[11px] text-white/50">PNG, JPG, or PDF up to 10MB</p>
-                <div className="inline-flex items-center gap-1.5 px-3 py-1 rounded-lg bg-white/10 text-white text-[11px] font-mono">
-                  <CheckCircle2 className="w-3.5 h-3.5 text-[#6dff8a]" />
-                  <span>{docFrontName}</span>
-                </div>
-              </div>
+                {uploading === 'front' ? (
+                  <span className="text-[11px] text-yellow-300 font-mono">Uploading...</span>
+                ) : docFrontName ? (
+                  <div className="inline-flex items-center gap-1.5 px-3 py-1 rounded-lg bg-white/10 text-white text-[11px] font-mono max-w-full">
+                    <CheckCircle2 className="w-3.5 h-3.5 text-[#6dff8a] shrink-0" />
+                    <span className="truncate">{docFrontName}</span>
+                  </div>
+                ) : (
+                  <span className="text-[11px] text-[#6dff8a] font-semibold">Click to choose file</span>
+                )}
+              </label>
 
               {/* Back Page */}
-              <div className="p-4 rounded-2xl bg-black/40 border-2 border-dashed border-white/20 hover:border-[#6dff8a]/50 text-center space-y-2 transition-colors">
+              <label className="p-4 rounded-2xl bg-black/40 border-2 border-dashed border-white/20 hover:border-[#6dff8a]/50 text-center space-y-2 transition-colors cursor-pointer flex flex-col items-center justify-center">
+                <input type="file" accept="image/*,application/pdf" className="hidden" onChange={onPick('back')} />
                 <Upload className="w-6 h-6 text-[#6dff8a] mx-auto" />
-                <div className="text-xs font-bold text-white">Upload Back Page / MRZ Signature Strip</div>
-                <p className="text-[11px] text-white/50">Required for ID cards and Driving Licenses</p>
-                <div className="inline-flex items-center gap-1.5 px-3 py-1 rounded-lg bg-white/10 text-white text-[11px] font-mono">
-                  <CheckCircle2 className="w-3.5 h-3.5 text-[#6dff8a]" />
-                  <span>{docBackName}</span>
-                </div>
-              </div>
+                <div className="text-xs font-bold text-white">Upload Back Page / MRZ Strip</div>
+                <p className="text-[11px] text-white/50">Required for ID cards and driving licences</p>
+                {uploading === 'back' ? (
+                  <span className="text-[11px] text-yellow-300 font-mono">Uploading...</span>
+                ) : docBackName ? (
+                  <div className="inline-flex items-center gap-1.5 px-3 py-1 rounded-lg bg-white/10 text-white text-[11px] font-mono max-w-full">
+                    <CheckCircle2 className="w-3.5 h-3.5 text-[#6dff8a] shrink-0" />
+                    <span className="truncate">{docBackName}</span>
+                  </div>
+                ) : (
+                  <span className="text-[11px] text-[#6dff8a] font-semibold">Click to choose file</span>
+                )}
+              </label>
             </div>
 
             <div className="flex justify-between pt-4">
@@ -397,14 +458,22 @@ export const UserKycTab: React.FC<UserKycTabProps> = ({ currentUser, onNotify })
                 </ul>
               </div>
 
-              <div className="p-4 rounded-2xl bg-black/40 border-2 border-dashed border-white/20 hover:border-[#6dff8a]/50 text-center space-y-2 transition-colors flex flex-col items-center justify-center">
-                <Upload className="w-6 h-6 text-[#6dff8a]" />
+<label className="p-4 rounded-2xl bg-black/40 border-2 border-dashed border-white/20 hover:border-[#6dff8a]/50 text-center space-y-2 transition-colors cursor-pointer flex flex-col items-center justify-center">
+                <input type="file" accept="image/*,application/pdf" className="hidden" onChange={onPick('proof')} />
+                <Upload className="w-6 h-6 text-[#6dff8a] mx-auto" />
                 <div className="text-xs font-bold text-white">Upload Proof of Address Document</div>
-                <div className="inline-flex items-center gap-1.5 px-3 py-1 rounded-lg bg-white/10 text-white text-[11px] font-mono">
-                  <CheckCircle2 className="w-3.5 h-3.5 text-[#6dff8a]" />
-                  <span>{proofAddressName}</span>
-                </div>
-              </div>
+                <p className="text-[11px] text-white/50">Dated within the last 90 days</p>
+                {uploading === 'proof' ? (
+                  <span className="text-[11px] text-yellow-300 font-mono">Uploading...</span>
+                ) : proofAddressName ? (
+                  <div className="inline-flex items-center gap-1.5 px-3 py-1 rounded-lg bg-white/10 text-white text-[11px] font-mono max-w-full">
+                    <CheckCircle2 className="w-3.5 h-3.5 text-[#6dff8a] shrink-0" />
+                    <span className="truncate">{proofAddressName}</span>
+                  </div>
+                ) : (
+                  <span className="text-[11px] text-[#6dff8a] font-semibold">Click to choose file</span>
+                )}
+              </label>
             </div>
 
             <div className="flex justify-between pt-4">
@@ -431,55 +500,40 @@ export const UserKycTab: React.FC<UserKycTabProps> = ({ currentUser, onNotify })
         {step === 4 && (
           <div className="space-y-4 animate-fadeIn">
             <div>
-              <h4 className="text-sm font-bold text-white">Step 4: Biometric Liveness Verification</h4>
-              <p className="text-xs text-white/50">Anti-spoof facial scan to confirm that you are the legitimate document owner.</p>
+              <h4 className="text-sm font-bold text-white">Step 4: Selfie Verification</h4>
+              <p className="text-xs text-white/50">Take a clear photo of your face so we can match it to your ID document.</p>
             </div>
 
             <div className="max-w-md mx-auto p-6 rounded-3xl bg-black/50 border border-white/15 text-center space-y-4">
-              {/* Visual Webcam Frame */}
+              <input ref={selfieInputRef} type="file" accept="image/*" capture="user" className="hidden" onChange={onPick('selfie')} />
               <div className="relative aspect-[4/3] rounded-2xl bg-[#0e110a] border-2 border-[#6dff8a]/40 flex flex-col items-center justify-center overflow-hidden">
-                {isScanning && (
-                  <div className="absolute inset-0 bg-[#6dff8a]/10 z-10 flex items-center justify-center">
-                    <div className="w-full h-1 bg-[#6dff8a] shadow-[0_0_15px_#6dff8a] absolute animate-bounce" />
-                    <span className="text-xs font-mono font-bold text-[#6dff8a] bg-black/70 px-3 py-1 rounded-full">
-                      Scanning Facial Geometry...
-                    </span>
-                  </div>
-                )}
-
-                {/* Face Silhouette Oval */}
-                <div className="w-28 h-36 rounded-[50%] border-2 border-dashed border-[#6dff8a]/70 flex items-center justify-center relative">
-                  <div className="w-16 h-20 rounded-[50%] bg-[#6dff8a]/10 flex items-center justify-center text-white font-bold">
+                {isScanning ? (
+                  <video ref={videoRef} playsInline muted className="absolute inset-0 w-full h-full object-cover -scale-x-100" />
+                ) : selfiePreview ? (
+                  <img src={selfiePreview} alt="Selfie" className="absolute inset-0 w-full h-full object-cover" />
+                ) : (
+                  <div className="w-28 h-36 rounded-[50%] border-2 border-dashed border-[#6dff8a]/70 flex items-center justify-center">
                     <User className="w-8 h-8 text-[#6dff8a]" />
                   </div>
-                </div>
-
-                <div className="mt-3 text-[11px] font-mono text-white/60">
-                  {selfieTaken ? (
-                    <span className="text-[#6dff8a] font-bold flex items-center justify-center gap-1">
-                      <CheckCircle2 className="w-4 h-4" />
-                      Liveness Passed • Match 98.8%
-                    </span>
-                  ) : (
-                    'Position your face inside the frame'
-                  )}
+                )}
+                {isScanning && <div className="absolute w-36 h-44 rounded-[50%] border-2 border-[#6dff8a] pointer-events-none" />}
+                <div className="absolute bottom-2 text-[11px] font-mono bg-black/60 px-2 py-0.5 rounded text-white/80">
+                  {uploading === 'selfie' ? 'Uploading...' : selfieTaken ? 'Selfie uploaded' : isScanning ? 'Position your face inside the oval' : 'Camera off'}
                 </div>
               </div>
 
-              {!selfieTaken ? (
-                <button
-                  type="button"
-                  disabled={isScanning}
-                  onClick={handleStartBiometricScan}
-                  className="w-full flex items-center justify-center gap-2 py-3 rounded-2xl bg-[#6dff8a] text-[#15170f] font-bold text-xs hover:bg-[#5ce077] disabled:opacity-50 transition-all shadow-md"
-                >
-                  <Camera className="w-4 h-4" />
-                  <span>{isScanning ? 'Verifying Liveness...' : 'Start Facial Verification'}</span>
+              {isScanning ? (
+                <button type="button" onClick={captureSelfie} className="w-full flex items-center justify-center gap-2 py-3 rounded-2xl bg-[#6dff8a] text-[#15170f] font-bold text-xs hover:bg-[#5ce077]">
+                  <Camera className="w-4 h-4" /><span>Capture Selfie</span>
                 </button>
               ) : (
-                <div className="p-3 rounded-xl bg-[#6dff8a]/15 border border-[#6dff8a]/30 text-xs text-[#6dff8a] font-semibold flex items-center justify-center gap-2">
-                  <Check className="w-4 h-4" />
-                  <span>Biometric check certified. Ready to submit package.</span>
+                <div className="grid grid-cols-2 gap-2">
+                  <button type="button" disabled={uploading === 'selfie'} onClick={handleStartBiometricScan} className="flex items-center justify-center gap-2 py-3 rounded-2xl bg-[#6dff8a] text-[#15170f] font-bold text-xs hover:bg-[#5ce077] disabled:opacity-50">
+                    <Camera className="w-4 h-4" /><span>{selfieTaken ? 'Retake with camera' : 'Use camera'}</span>
+                  </button>
+                  <button type="button" disabled={uploading === 'selfie'} onClick={() => selfieInputRef.current?.click()} className="flex items-center justify-center gap-2 py-3 rounded-2xl bg-white/10 text-white font-bold text-xs hover:bg-white/15 disabled:opacity-50">
+                    <Upload className="w-4 h-4" /><span>Upload photo</span>
+                  </button>
                 </div>
               )}
             </div>
@@ -495,11 +549,12 @@ export const UserKycTab: React.FC<UserKycTabProps> = ({ currentUser, onNotify })
 
               <button
                 type="button"
+                disabled={submitting}
                 onClick={handleSubmitKyc}
                 className="flex items-center gap-2 px-6 py-3 rounded-2xl bg-[#6dff8a] text-[#15170f] font-bold text-xs hover:bg-[#5ce077] shadow-[0_0_25px_rgba(109,255,138,0.3)] transition-all transform hover:scale-105 active:scale-95"
               >
                 <ShieldCheck className="w-4 h-4" />
-                <span>Submit Verification Package</span>
+                <span>{submitting ? 'Submitting...' : 'Submit Verification Package'}</span>
               </button>
             </div>
           </div>

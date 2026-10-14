@@ -87,6 +87,10 @@ export interface UserAccount {
   kycDocBackName?: string;
   kycProofAddressName?: string;
   kycSelfieVerified?: boolean;
+  emailVerified?: boolean;
+  referralCode?: string;
+  kycFileIds?: { front?: string; back?: string; proof?: string; selfie?: string };
+  demo?: boolean;
 }
 
 export interface EmailMessage {
@@ -103,6 +107,9 @@ export interface EmailMessage {
   read: boolean;
   isRead?: boolean;
   direction: 'outbound' | 'inbound'; // outbound: admin -> user; inbound: user -> admin
+  delivery?: string;   // email delivery status reported by the server
+  replyEmail?: string; // for inbound messages (incl. website form submissions)
+  ts?: number;
 }
 
 export interface KycSubmissionPayload {
@@ -134,6 +141,7 @@ export interface FundingTransaction {
   date: string;
   adminNote?: string;
   destination?: string;
+  ts?: number;
 }
 
 export interface AuditLog {
@@ -159,4 +167,6 @@ export interface UserPosition {
   profitPercent: number;
   category: string;
   openDate: string;
+  invested?: number;
+  leverage?: number;
 }

@@ -1,5 +1,5 @@
 import React, { useState } from 'react';
-import { POPULAR_INVESTORS } from '../data/mockData';
+import { useBrokerage } from '../context/BrokerageContext';
 import { PopularInvestor } from '../types';
 import { Check, ShieldCheck, TrendingUp, Users, ArrowRight, Sparkles } from 'lucide-react';
 
@@ -12,12 +12,18 @@ export const PopularInvestors: React.FC<PopularInvestorsProps> = ({
   onCopyInvestor, 
   onExploreAll 
 }) => {
-  const [selectedInvestor, setSelectedInvestor] = useState<PopularInvestor>(POPULAR_INVESTORS[0]);
+  const { investors } = useBrokerage();
+  const POPULAR_INVESTORS = investors;
+  const [selectedId, setSelectedId] = useState<string | number | null>(null);
+  const selectedInvestor: PopularInvestor | undefined =
+    investors.find(i => String(i.id) === String(selectedId)) || investors[0];
+  const setSelectedInvestor = (i: PopularInvestor) => setSelectedId(i.id);
   const [simulatedCapital, setSimulatedCapital] = useState(1000);
 
   // Projected 2-year profit based on historical 24M return
-  const projectedReturn = (simulatedCapital * (selectedInvestor.return24M / 100));
+  const projectedReturn = (simulatedCapital * ((selectedInvestor?.return24M || 0) / 100));
   const projectedTotal = simulatedCapital + projectedReturn;
+  if (!selectedInvestor) return null;
 
   return (
     <section id="copytrader" className="py-20 bg-[#15170f] relative border-b border-white/5">

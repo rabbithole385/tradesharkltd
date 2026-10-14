@@ -1,6 +1,7 @@
 import React from 'react';
 import { TradeSharkLogo } from './TradeSharkLogo';
 import { FOOTER_NAV_COLUMNS } from '../data/mockData';
+import { useBrokerage } from '../context/BrokerageContext';
 import { 
   Facebook, 
   Instagram, 
@@ -8,8 +9,10 @@ import {
   Twitter, 
   Youtube, 
   ShieldAlert, 
-  ExternalLink,
-  ChevronRight
+  Send,
+  Mail,
+  Phone,
+  MapPin
 } from 'lucide-react';
 
 interface FooterProps {
@@ -21,6 +24,17 @@ export const Footer: React.FC<FooterProps> = ({
   onOpenUserDashboard,
   onOpenAdminPortal
 }) => {
+  const { config } = useBrokerage();
+  const socials = [
+    { icon: <Facebook className="w-4 h-4" />, href: config.social.facebook, label: 'Facebook' },
+    { icon: <Instagram className="w-4 h-4" />, href: config.social.instagram, label: 'Instagram' },
+    { icon: <Linkedin className="w-4 h-4" />, href: config.social.linkedin, label: 'LinkedIn' },
+    { icon: <Twitter className="w-4 h-4" />, href: config.social.x, label: 'X (Twitter)' },
+    { icon: <Youtube className="w-4 h-4" />, href: config.social.youtube, label: 'YouTube' },
+    { icon: <Send className="w-4 h-4" />, href: config.social.telegram, label: 'Telegram' },
+  ].filter(s => !!s.href);
+  const year = new Date().getFullYear();
+
   return (
     <footer className="bg-[#0f110a] text-white/80 pt-16 pb-12 border-t border-white/10">
       <div className="max-w-7xl mx-auto px-4 sm:px-6 lg:px-8 space-y-12">
@@ -31,43 +45,55 @@ export const Footer: React.FC<FooterProps> = ({
           <div className="lg:col-span-5 space-y-5">
             <TradeSharkLogo size="lg" showLtd={true} />
             <p className="text-sm text-[#a3a89e] leading-relaxed max-w-sm">
-              A premier global financial intelligence and multi-asset trading platform empowering over 40 million users across 75 countries.
+              A multi-asset trading and investing platform for stocks, ETFs, crypto, commodities and more.
             </p>
 
-            {/* Social Icons */}
-            <div className="space-y-2">
-              <span className="text-xs font-semibold uppercase tracking-wider text-white/60 block">
-                Connect with TradeShark
-              </span>
-              <div className="flex items-center gap-3">
-                {[
-                  { icon: <Facebook className="w-4 h-4" />, href: '#facebook', label: 'Facebook' },
-                  { icon: <Instagram className="w-4 h-4" />, href: '#instagram', label: 'Instagram' },
-                  { icon: <Linkedin className="w-4 h-4" />, href: '#linkedin', label: 'LinkedIn' },
-                  { icon: <Twitter className="w-4 h-4" />, href: '#x', label: 'X (Twitter)' },
-                  { icon: <Youtube className="w-4 h-4" />, href: '#youtube', label: 'YouTube' }
-                ].map((s, i) => (
-                  <a
-                    key={i}
-                    href={s.href}
-                    aria-label={s.label}
-                    className="w-9 h-9 rounded-full bg-white/5 hover:bg-[#6dff8a] text-white hover:text-[#15170f] flex items-center justify-center transition-all border border-white/10"
-                  >
-                    {s.icon}
-                  </a>
-                ))}
-              </div>
+            {/* Contact details (from site config) */}
+            <div className="space-y-1.5 text-xs text-[#a3a89e]">
+              {config.supportEmail && (
+                <a href={`mailto:${config.supportEmail}`} className="flex items-center gap-2 hover:text-[#6dff8a]"><Mail className="w-3.5 h-3.5" />{config.supportEmail}</a>
+              )}
+              {config.supportPhone && (
+                <a href={`tel:${config.supportPhone.replace(/\s/g, '')}`} className="flex items-center gap-2 hover:text-[#6dff8a]"><Phone className="w-3.5 h-3.5" />{config.supportPhone}</a>
+              )}
+              {config.address && (
+                <span className="flex items-start gap-2"><MapPin className="w-3.5 h-3.5 mt-0.5 shrink-0" />{config.address}</span>
+              )}
             </div>
+
+            {/* Social Icons (only networks configured via env vars are shown) */}
+            {socials.length > 0 && (
+              <div className="space-y-2">
+                <span className="text-xs font-semibold uppercase tracking-wider text-white/60 block">
+                  Connect with {config.appName}
+                </span>
+                <div className="flex items-center gap-3">
+                  {socials.map((s, i) => (
+                    <a
+                      key={i}
+                      href={s.href}
+                      target="_blank"
+                      rel="noopener noreferrer"
+                      aria-label={s.label}
+                      className="w-9 h-9 rounded-full bg-white/5 hover:bg-[#6dff8a] text-white hover:text-[#15170f] flex items-center justify-center transition-all border border-white/10"
+                    >
+                      {s.icon}
+                    </a>
+                  ))}
+                </div>
+              </div>
+            )}
           </div>
 
           {/* App Store Download Badges */}
           <div className="lg:col-span-7 flex flex-col lg:items-end justify-center space-y-3">
             <span className="text-xs font-semibold uppercase tracking-wider text-white/60">
-              Download the TradeShark Mobile App
+              Download the {config.appName} Mobile App
             </span>
             <div className="flex flex-wrap items-center gap-3">
               <a
-                href="#app-store"
+                href={config.apps.ios || '/mobile-app'}
+                {...(config.apps.ios ? { target: '_blank', rel: 'noopener noreferrer' } : {})}
                 className="flex items-center gap-3 px-4 py-2.5 rounded-xl bg-white/5 hover:bg-white/10 border border-white/10 transition-colors"
               >
                 <div className="text-xl">🍎</div>
@@ -78,7 +104,8 @@ export const Footer: React.FC<FooterProps> = ({
               </a>
 
               <a
-                href="#google-play"
+                href={config.apps.android || '/mobile-app'}
+                {...(config.apps.android ? { target: '_blank', rel: 'noopener noreferrer' } : {})}
                 className="flex items-center gap-3 px-4 py-2.5 rounded-xl bg-white/5 hover:bg-white/10 border border-white/10 transition-colors"
               >
                 <div className="text-xl">🤖</div>
@@ -131,7 +158,7 @@ export const Footer: React.FC<FooterProps> = ({
                 <span>Client WebTrader Terminal</span>
               </button>
             )}
-            {onOpenAdminPortal && (
+            {onOpenAdminPortal && config.features.showAdminLink && (
               <button
                 onClick={onOpenAdminPortal}
                 className="px-3.5 py-2 rounded-xl bg-red-500/15 hover:bg-red-500/25 text-red-400 font-semibold flex items-center gap-1.5 transition-colors cursor-pointer border border-red-500/30 text-xs"
@@ -148,7 +175,7 @@ export const Footer: React.FC<FooterProps> = ({
             <ShieldAlert className="w-5 h-5 text-[#6dff8a] shrink-0 mt-0.5" />
             <div className="space-y-2">
               <p>
-                <strong>High Risk Investment Warning:</strong> CFDs are complex instruments and come with a high risk of losing money rapidly due to leverage. <strong>51% of retail investor accounts lose money</strong> when trading CFDs with this provider. You should consider whether you understand how CFDs work and whether you can afford to take the high risk of losing your money.
+                <strong>High Risk Investment Warning:</strong> CFDs are complex instruments and come with a high risk of losing money rapidly due to leverage. <strong>A significant proportion of retail investor accounts lose money</strong> when trading CFDs. You should consider whether you understand how CFDs work and whether you can afford to take the high risk of losing your money.
               </p>
               <p>
                 Cryptoasset investing is highly volatile and unregulated in some jurisdictions. No consumer protection. Tax on profits may apply. Past performance is not an indication of future results. Trading history presented is less than 5 complete years and may not suffice as basis for investment decisions.
@@ -156,24 +183,22 @@ export const Footer: React.FC<FooterProps> = ({
             </div>
           </div>
 
-          <p>
-            TradeShark Ltd (Company No. 08291840) is authorized and regulated by the Financial Conduct Authority (FCA) under firm reference number 583261. TradeShark (Europe) Ltd is authorized and regulated by the Cyprus Securities and Exchange Commission (CySEC) under license number 109/10. TradeShark AUS Capital Pty Ltd is regulated by the Australian Securities and Investments Commission (ASIC) AFSL 491139.
-          </p>
+          {config.regulatoryText && <p>{config.regulatoryText}</p>}
 
           <p>
-            CopyTrader™ is an investment management service provided by TradeShark Ltd. The value of your investments may go up or down. Your capital is at risk.
+            CopyTrader™ is an investment management service provided by {config.legalName}. The value of your investments may go up or down. Your capital is at risk.
           </p>
 
           <div className="flex flex-col sm:flex-row items-center justify-between gap-4 pt-6 border-t border-white/5 text-[11px] text-white/40">
             <div>
-              &copy; 2026 TradeShark Ltd. All rights reserved. Registered office: 25 Bank Street, Canary Wharf, London, E14 5JP, United Kingdom.
+              &copy; {year} {config.legalName}. All rights reserved.{config.companyNumber ? ` Company No. ${config.companyNumber}.` : ''}{config.address ? ` Registered office: ${config.address}.` : ''}
             </div>
             <div className="flex items-center gap-4">
-              <a href="#privacy" className="hover:text-white transition-colors">Privacy Notice</a>
+              <a href="/privacy" className="hover:text-white transition-colors">Privacy Notice</a>
               <span>•</span>
-              <a href="#cookies" className="hover:text-white transition-colors">Cookie Policy</a>
+              <a href="/cookies" className="hover:text-white transition-colors">Cookie Policy</a>
               <span>•</span>
-              <a href="#terms" className="hover:text-white transition-colors">Client Agreement</a>
+              <a href="/terms" className="hover:text-white transition-colors">Client Agreement</a>
             </div>
           </div>
         </div>

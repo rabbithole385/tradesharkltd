@@ -1,23 +1,41 @@
 import React, { useState } from 'react';
 import { PopularInvestor } from '../types';
+import { useBrokerage } from '../context/BrokerageContext';
+import { errMsg } from '../lib/api';
 import { X, CheckCircle2, Shield, Users, ArrowRight, DollarSign } from 'lucide-react';
 
 interface CopyModalProps {
   investor: PopularInvestor | null;
   onClose: () => void;
+  onRequireAuth?: () => void;
+  onOpenPortal?: (tab?: string) => void;
 }
 
-export const CopyModal: React.FC<CopyModalProps> = ({ investor, onClose }) => {
-  if (!investor) return null;
+export const CopyModal: React.FC<CopyModalProps> = (props) => (props.investor ? <CopyModalInner {...props} investor={props.investor} /> : null);
 
+const CopyModalInner: React.FC<CopyModalProps & { investor: PopularInvestor }> = ({ investor: initial, onClose, onRequireAuth, onOpenPortal }) => {
+  const { currentUser, startCopy, investors } = useBrokerage();
+  const investor = investors.find(i => String(i.id) === String(initial.id)) || initial; // live copier count
   const [amount, setAmount] = useState(500);
   const [stopLossPercent, setStopLossPercent] = useState(60);
   const [copyOpenTrades, setCopyOpenTrades] = useState(true);
   const [isSuccess, setIsSuccess] = useState(false);
+  const [error, setError] = useState<string | null>(null);
+  const [busy, setBusy] = useState(false);
 
-  const handleSubmit = (e: React.FormEvent) => {
+  const handleSubmit = async (e: React.FormEvent) => {
     e.preventDefault();
-    setIsSuccess(true);
+    setError(null);
+    if (!currentUser) { onRequireAuth?.(); return; }
+    setBusy(true);
+    try {
+      await startCopy(investor.id, amount, stopLossPercent, copyOpenTrades);
+      setIsSuccess(true);
+    } catch (err) {
+      setError(errMsg(err));
+    } finally {
+      setBusy(false);
+    }
   };
 
   const stopLossAmount = (amount * (stopLossPercent / 100)).toFixed(0);
@@ -46,14 +64,12 @@ export const CopyModal: React.FC<CopyModalProps> = ({ investor, onClose }) => {
             </p>
             <div className="pt-4">
               <button
-                onClick={() => {
-                  setIsSuccess(false);
-                  onClose();
-                }}
+                onClick={() => onOpenPortal?.('copy')}
                 className="w-full py-3 rounded-full bg-[#6dff8a] text-[#15170f] font-bold text-sm"
               >
-                Close Window
+                View my CopyTrader portfolio
               </button>
+              <button onClick={() => { setIsSuccess(false); onClose(); }} className="w-full mt-2 py-2 text-white/60 text-xs">Close</button>
             </div>
           </div>
         ) : (
@@ -150,12 +166,15 @@ export const CopyModal: React.FC<CopyModalProps> = ({ investor, onClose }) => {
               <span>Copy currently open trades at prevailing market prices</span>
             </label>
 
+            {error && <div className="p-3 rounded-xl bg-red-500/10 border border-red-500/30 text-xs text-red-300">{error}</div>}
+
             {/* Submit */}
             <button
               type="submit"
+              disabled={busy}
               className="w-full py-4 rounded-full bg-[#6dff8a] hover:bg-[#5ce077] text-[#15170f] font-bold text-base flex items-center justify-center gap-2 shadow-[0_0_20px_rgba(109,255,138,0.25)] transition-all transform hover:scale-[1.01]"
             >
-              <span>Confirm &amp; Copy {investor.name.split(' ')[0]}</span>
+              <span>{!currentUser ? 'Log in to Copy' : busy ? 'Activating...' : `Confirm & Copy ${investor.name.split(' ')[0]}`}</span>
               <ArrowRight className="w-4 h-4" />
             </button>
           </form>

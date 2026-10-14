@@ -1,5 +1,5 @@
 import React, { useState, useMemo } from 'react';
-import { INSTRUMENTS } from '../data/mockData';
+import { useBrokerage } from '../context/BrokerageContext';
 import { Instrument } from '../types';
 import { ArrowRight, Search, Clock, ChevronRight, TrendingUp, TrendingDown, Shield } from 'lucide-react';
 
@@ -14,6 +14,7 @@ export const ProductRange: React.FC<ProductRangeProps> = ({
 }) => {
   const [activeTab, setActiveTab] = useState<'stocks' | 'etfs' | 'crypto' | 'commodities' | 'indices' | 'currencies'>('stocks');
   const [searchQuery, setSearchQuery] = useState('');
+  const { instruments: INSTRUMENTS } = useBrokerage();
 
   const tabs = [
     { id: 'stocks', label: 'Stocks' },
@@ -57,7 +58,7 @@ export const ProductRange: React.FC<ProductRangeProps> = ({
       bullets: [
         'Trade physical & non-expiry commodity CFDs 24/7.',
         'Hedge inflation with precious metals and energy markets.',
-        'Built-in guaranteed stop-loss and take-profit controls.'
+        'Built-in stop-loss and take-profit controls.'
       ],
       ctaText: 'Trade Commodities'
     },
@@ -65,7 +66,7 @@ export const ProductRange: React.FC<ProductRangeProps> = ({
       headline: 'Major global indices. Minor spreads.',
       bullets: [
         'Ultra-tight spreads on NASDAQ 100, S&P 500, FTSE 100 and DAX 40.',
-        'Lightning execution speeds with zero slippage guarantees.',
+        'Fast order execution with transparent pricing.',
         'Gain broad market exposure with up to 20x leverage.'
       ],
       ctaText: 'Trade Indices'
@@ -92,7 +93,7 @@ export const ProductRange: React.FC<ProductRangeProps> = ({
         inst.name.toLowerCase().includes(searchQuery.toLowerCase());
       return matchCategory && matchSearch;
     });
-  }, [activeTab, searchQuery]);
+  }, [activeTab, searchQuery, INSTRUMENTS]);
 
   return (
     <section id="markets" className="py-20 bg-[#12140e] relative border-b border-white/5">

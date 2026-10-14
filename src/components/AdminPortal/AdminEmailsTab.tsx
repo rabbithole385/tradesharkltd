@@ -21,6 +21,7 @@ import {
 } from 'lucide-react';
 import { useBrokerage } from '../../context/BrokerageContext';
 import { EmailMessage, UserAccount } from '../../types';
+import { MailDeliveryPanel } from './MailDeliveryPanel';
 
 interface AdminEmailsTabProps {
   onNotify: (msg: string) => void;
@@ -33,7 +34,7 @@ const EMAIL_TEMPLATES = [
     category: 'KYC' as const,
     priority: 'High' as const,
     subject: 'Regulatory Identity Certified: Welcome to Tier 2 - Verified Pro',
-    body: `Dear {USER_NAME},\n\nWe are pleased to notify you that your government-issued identity documents and proof of residential address have been fully certified by TradeShark Compliance under FCA / CySEC regulatory frameworks.\n\nYour account has been elevated to Tier 2 - Verified Pro. Institutional leverage of 1:100 is now active with unrestricted execution on all stock CFDs, forex majors, ETFs, and digital asset markets.\n\nBest regards,\nTradeShark Compliance Operations\n100 Bishopsgate, London EC2N 4AG`
+    body: `Dear {USER_NAME},\n\nWe are pleased to notify you that your government-issued identity documents and proof of residential address have been fully certified by {BRAND} Compliance.\n\nYour account has been elevated to Tier 2 - Verified Pro. Institutional leverage of 1:100 is now active with unrestricted execution on all stock CFDs, forex majors, ETFs, and digital asset markets.\n\nBest regards,\n{BRAND} Compliance Operations`
   },
   {
     id: 'kyc-resubmit',
@@ -41,15 +42,15 @@ const EMAIL_TEMPLATES = [
     category: 'KYC' as const,
     priority: 'Urgent' as const,
     subject: 'Action Required: Verification Document Resubmission Needed',
-    body: `Dear {USER_NAME},\n\nOur compliance officer reviewed your verification file. We require an updated document before your application can be approved:\n\nNote: Please provide a clear, full-color copy of your recent bank statement or utility bill dated within the last 90 days. The residential address must match your registered account profile.\n\nPlease visit the KYC Verification Center in your Client Portal to upload the revised file.\n\nThank you,\nTradeShark Compliance Desk`
+    body: `Dear {USER_NAME},\n\nOur compliance officer reviewed your verification file. We require an updated document before your application can be approved:\n\nNote: Please provide a clear, full-color copy of your recent bank statement or utility bill dated within the last 90 days. The residential address must match your registered account profile.\n\nPlease visit the KYC Verification Center in your Client Portal to upload the revised file.\n\nThank you,\n{BRAND} Compliance Desk`
   },
   {
     id: 'deposit-cleared',
     name: 'Deposit Clearance & Margin Available',
     category: 'FUNDING' as const,
     priority: 'Normal' as const,
-    subject: 'Deposit Clearance Notice: Funds Credited to Segregated Account',
-    body: `Dear {USER_NAME},\n\nWe confirm that your incoming deposit of {AMOUNT} USD has cleared custodian settlement and has been credited directly to your live trading account.\n\nAll client balances are held in segregated Tier-1 custodial bank accounts under client money protection regulations.\n\nHappy trading,\nTradeShark Treasury Operations`
+    subject: 'Deposit Clearance Notice: Funds Credited to Your Account',
+    body: `Dear {USER_NAME},\n\nWe confirm that your incoming deposit of {AMOUNT} USD has cleared custodian settlement and has been credited directly to your live trading account.\n\nAll client balances are kept separate from company operating funds.\n\nHappy trading,\n{BRAND} Treasury Operations`
   },
   {
     id: 'withdrawal-dispatched',
@@ -57,7 +58,7 @@ const EMAIL_TEMPLATES = [
     category: 'FUNDING' as const,
     priority: 'Normal' as const,
     subject: 'Disbursement Notice: Withdrawal Dispatched to Destination Rail',
-    body: `Dear {USER_NAME},\n\nYour requested withdrawal of {AMOUNT} USD has been processed and released by our treasury cashier.\n\nDisbursement Rail: Bank Wire / SWIFT Clearing\nEstimated Settlement: 1-2 business days depending on receiving financial institution.\n\nSincerely,\nTradeShark Cashier Desk`
+    body: `Dear {USER_NAME},\n\nYour requested withdrawal of {AMOUNT} USD has been processed and released by our treasury cashier.\n\nDisbursement Rail: Bank Wire / SWIFT Clearing\nEstimated Settlement: 1-2 business days depending on receiving financial institution.\n\nSincerely,\n{BRAND} Cashier Desk`
   },
   {
     id: 'margin-warning',
@@ -65,7 +66,7 @@ const EMAIL_TEMPLATES = [
     category: 'TRADING' as const,
     priority: 'Urgent' as const,
     subject: 'Risk Advisory: Account Margin Utilization Warning',
-    body: `Dear {USER_NAME},\n\nThis is an automated advisory from the TradeShark Risk Management Desk. Your current account equity is approaching our maintenance margin threshold (80% utilization).\n\nTo prevent automatic liquidation of your active open positions, please consider reducing position sizes or depositing additional margin.\n\nTradeShark Risk Management Desk`
+    body: `Dear {USER_NAME},\n\nThis is an automated advisory from the {BRAND} Risk Management Desk. Your current account equity is approaching our maintenance margin threshold (80% utilization).\n\nTo prevent automatic liquidation of your active open positions, please consider reducing position sizes or depositing additional margin.\n\n{BRAND} Risk Management Desk`
   },
   {
     id: 'market-notice',
@@ -73,12 +74,12 @@ const EMAIL_TEMPLATES = [
     category: 'MARKET_ALERT' as const,
     priority: 'High' as const,
     subject: 'Market Advisory: Holiday Trading Hours & Spread Widening',
-    body: `Institutional Notice to All Clients:\n\nPlease be advised that due to upcoming international bank holidays, trading hours for US Equities and UK Index futures will close early this Friday at 17:00 GMT.\n\nSpread widening and reduced market liquidity may be observed across FX and Commodity pairs during rollover hours. Stop-loss orders and hedging positions should be monitored accordingly.\n\nChief Market Strategist\nTradeShark Analytics`
+    body: `Institutional Notice to All Clients:\n\nPlease be advised that due to upcoming international bank holidays, trading hours for US Equities and UK Index futures will close early this Friday at 17:00 GMT.\n\nSpread widening and reduced market liquidity may be observed across FX and Commodity pairs during rollover hours. Stop-loss orders and hedging positions should be monitored accordingly.\n\nChief Market Strategist\n{BRAND} Analytics`
   }
 ];
 
 export const AdminEmailsTab: React.FC<AdminEmailsTabProps> = ({ onNotify }) => {
-  const { users, emails, sendEmail, deleteEmail } = useBrokerage();
+  const { users, emails, sendEmail, deleteEmail, config } = useBrokerage();
 
   const [subTab, setSubTab] = useState<'compose' | 'outbox' | 'inbound'>('compose');
   const [selectedRecipient, setSelectedRecipient] = useState<string>('ALL');
@@ -106,14 +107,14 @@ export const AdminEmailsTab: React.FC<AdminEmailsTabProps> = ({ onNotify }) => {
     const targetUser = users.find(u => u.id === selectedRecipient);
     const userName = targetUser ? targetUser.name : 'Valued Client';
 
-    setSubject(tmpl.subject);
+    setSubject(tmpl.subject.replace(/\{BRAND\}/g, config.appName));
     setCategory(tmpl.category);
     setPriority(tmpl.priority);
-    setBody(tmpl.body.replace('{USER_NAME}', userName).replace('{AMOUNT}', '$10,000.00'));
+    setBody(tmpl.body.replace('{USER_NAME}', userName).replace('{AMOUNT}', '$10,000.00').replace(/\{BRAND\}/g, config.appName));
   };
 
   // Handle send email
-  const handleSendEmail = (e: React.FormEvent) => {
+  const handleSendEmail = async (e: React.FormEvent) => {
     e.preventDefault();
     if (!subject.trim() || !body.trim()) {
       onNotify('Please enter a subject and message body');
@@ -123,9 +124,10 @@ export const AdminEmailsTab: React.FC<AdminEmailsTabProps> = ({ onNotify }) => {
     const isBroadcast = selectedRecipient === 'ALL';
     const targetUser = users.find(u => u.id === selectedRecipient);
 
-    sendEmail({
-      from: 'TradeShark Regulatory Communications <compliance@tradeshark.co.uk>',
-      to: isBroadcast ? 'All Registered Clients (Broadcast)' : (targetUser?.email || 'client@tradeshark.com'),
+    try {
+    await sendEmail({
+      from: '',
+      to: isBroadcast ? 'All Clients' : (targetUser?.email || ''),
       userId: selectedRecipient,
       userName: isBroadcast ? 'All Clients' : targetUser?.name,
       subject,
@@ -134,8 +136,12 @@ export const AdminEmailsTab: React.FC<AdminEmailsTabProps> = ({ onNotify }) => {
       priority,
       direction: 'outbound'
     });
+    } catch (err: any) {
+      onNotify(err?.message || 'Email could not be sent');
+      return;
+    }
 
-    onNotify(`Email dispatch "${subject}" sent successfully to ${isBroadcast ? 'All Clients' : targetUser?.name}`);
+    onNotify(`Email "${subject}" sent to ${isBroadcast ? 'all clients' : targetUser?.name} (portal inbox + email)`);
     setSubject('');
     setBody('');
     setSelectedTemplateId('');
@@ -143,12 +149,14 @@ export const AdminEmailsTab: React.FC<AdminEmailsTabProps> = ({ onNotify }) => {
   };
 
   // Handle reply to inbound email
-  const handleSendReply = (inbound: EmailMessage) => {
+  const handleSendReply = async (inbound: EmailMessage) => {
     if (!replyText.trim()) return;
 
-    sendEmail({
-      from: 'TradeShark Institutional Support <support@tradeshark.co.uk>',
-      to: inbound.from,
+    try {
+    await sendEmail({
+      replyToId: inbound.id,
+      from: '',
+      to: inbound.replyEmail || inbound.from,
       userId: inbound.userId,
       userName: inbound.userName,
       subject: `Re: ${inbound.subject}`,
@@ -157,8 +165,12 @@ export const AdminEmailsTab: React.FC<AdminEmailsTabProps> = ({ onNotify }) => {
       priority: 'Normal',
       direction: 'outbound'
     });
+    } catch (err: any) {
+      onNotify(err?.message || 'Reply could not be sent');
+      return;
+    }
 
-    onNotify(`Reply sent to ${inbound.userName || inbound.to}`);
+    onNotify(`Reply emailed to ${inbound.userName || inbound.to}`);
     setReplyText('');
     setViewingEmail(null);
   };
@@ -174,6 +186,7 @@ export const AdminEmailsTab: React.FC<AdminEmailsTabProps> = ({ onNotify }) => {
 
   return (
     <div className="space-y-6">
+      <MailDeliveryPanel />
       {/* Top Header & Sub-Tabs */}
       <div className="flex flex-wrap items-center justify-between gap-4 border-b border-white/10 pb-4">
         <div>
@@ -342,7 +355,7 @@ export const AdminEmailsTab: React.FC<AdminEmailsTabProps> = ({ onNotify }) => {
 
               <div className="flex items-center justify-between pt-2">
                 <span className="text-[11px] text-white/50">
-                  Transmitted securely via TradeShark Message Gateway (TLS 1.3)
+                  Delivered to the client portal inbox and by email
                 </span>
 
                 <button
@@ -366,7 +379,7 @@ export const AdminEmailsTab: React.FC<AdminEmailsTabProps> = ({ onNotify }) => {
               <div className="border-b border-white/10 pb-3 space-y-1">
                 <div className="flex items-center justify-between">
                   <span className="text-[10px] text-white/50">From:</span>
-                  <span className="text-[10px] font-mono text-[#6dff8a]">TradeShark Compliance Desk</span>
+                  <span className="text-[10px] font-mono text-[#6dff8a]">{config.appName} Client Desk</span>
                 </div>
                 <div className="flex items-center justify-between">
                   <span className="text-[10px] text-white/50">To:</span>
@@ -391,8 +404,7 @@ export const AdminEmailsTab: React.FC<AdminEmailsTabProps> = ({ onNotify }) => {
               </div>
 
               <div className="pt-3 border-t border-white/10 text-[10px] text-white/40 space-y-0.5">
-                <div>TradeShark Ltd • Registered in England &amp; Wales No. 09148201</div>
-                <div>Authorised and Regulated by the Financial Conduct Authority (FRN 583261)</div>
+                <div>{config.legalName}{config.companyNumber ? ` • Company No. ${config.companyNumber}` : ''}</div>
               </div>
             </div>
           </div>
@@ -456,6 +468,11 @@ export const AdminEmailsTab: React.FC<AdminEmailsTabProps> = ({ onNotify }) => {
 
                     <td className="p-3.5 font-mono text-white/50 text-[11px]">
                       {email.date}
+                      {email.delivery && (
+                        <div className={`text-[9px] ${email.delivery.startsWith('failed') ? 'text-red-400' : 'text-[#6dff8a]/70'}`} title={email.delivery}>
+                          {email.delivery.length > 28 ? email.delivery.slice(0, 28) + '…' : email.delivery}
+                        </div>
+                      )}
                     </td>
 
                     <td className="p-3.5 text-right space-x-2">

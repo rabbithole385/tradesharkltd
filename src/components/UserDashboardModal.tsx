@@ -32,106 +32,84 @@ import { FundingTransaction } from '../types';
 import { UserSidebar, UserTab } from './UserPortal/UserSidebar';
 import { UserKycTab } from './UserPortal/UserKycTab';
 import { UserInboxTab } from './UserPortal/UserInboxTab';
-import { UserLoginGate, UserSession } from './UserPortal/UserLoginGate';
+import { UserLoginGate } from './UserPortal/UserLoginGate';
+import { errMsg } from '../lib/api';
 
 interface UserDashboardModalProps {
   isOpen: boolean;
   onClose: () => void;
-  user?: { name: string; email: string } | null;
+  initialTab?: string;
   onOpenTrade: (symbol: string) => void;
   onOpenAdminPortal?: () => void;
 }
 
-export const UserDashboardModal: React.FC<UserDashboardModalProps> = ({
-  isOpen,
+const TAB_IDS: UserTab[] = ['portfolio', 'positions', 'markets', 'deposit', 'withdraw', 'kyc', 'inbox', 'copy', 'history', 'settings'];
+
+export const UserDashboardModal: React.FC<UserDashboardModalProps> = (props) => {
+  const { currentUser, ready } = useBrokerage();
+  if (!props.isOpen || !ready) return null;
+  if (!currentUser) {
+    return (
+      <div className="fixed inset-0 z-50 flex items-center justify-center p-3 sm:p-4 bg-black/90 backdrop-blur-md animate-fadeIn">
+        <UserLoginGate onLoginSuccess={() => undefined} onClose={props.onClose} />
+      </div>
+    );
+  }
+  return <UserDashboardInner {...props} />;
+};
+
+const UserDashboardInner: React.FC<UserDashboardModalProps> = ({
   onClose,
+  initialTab,
   onOpenTrade,
   onOpenAdminPortal
 }) => {
-  if (!isOpen) return null;
-
   const {
-    currentUser,
-    setCurrentUserId,
+    currentUser: maybeUser,
     transactions,
     positions,
     emails,
+    copies,
+    payments,
+    config,
     closePosition,
     submitDeposit,
-    submitWithdrawal
+    submitWithdrawal,
+    stopCopy,
+    logoutUser,
+    notify,
+    changePassword,
+    updateProfile,
+    resendVerification,
+    resetPractice
   } = useBrokerage();
+  const currentUser = maybeUser!;
 
-  // Authentication & Session Guard: never log in automatically
-  const [userSession, setUserSession] = useState<UserSession | null>(() => {
-    try {
-      const tabStr = sessionStorage.getItem('tradeshark_user_session');
-      if (tabStr) {
-        const parsed = JSON.parse(tabStr);
-        if (Date.now() < parsed.expiresAt) {
-          return parsed;
-        }
-        sessionStorage.removeItem('tradeshark_user_session');
-      }
-      const localStr = localStorage.getItem('tradeshark_user_session');
-      if (localStr) {
-        const parsed = JSON.parse(localStr);
-        if (Date.now() < parsed.expiresAt) {
-          return parsed;
-        }
-        localStorage.removeItem('tradeshark_user_session');
-      }
-    } catch (e) {
-      console.error('Error reading user session', e);
-    }
-    return null;
-  });
-
-  const handleLogout = () => {
-    sessionStorage.removeItem('tradeshark_user_session');
-    localStorage.removeItem('tradeshark_user_session');
-    setUserSession(null);
+  const handleLogout = async () => {
+    await logoutUser();
+    notify('You have been signed out', 'info');
+    onClose();
   };
 
-  const [activeTab, setActiveTab] = useState<UserTab>('portfolio');
+  const [activeTab, setActiveTab] = useState<UserTab>(() => (TAB_IDS.includes(initialTab as UserTab) ? initialTab as UserTab : 'portfolio'));
+  React.useEffect(() => { if (initialTab && TAB_IDS.includes(initialTab as UserTab)) setActiveTab(initialTab as UserTab); }, [initialTab]);
   const [accountType, setAccountType] = useState<'real' | 'virtual'>('real');
   const [copiedLink, setCopiedLink] = useState(false);
   
   // Deposit form state
-  const [depositAmount, setDepositAmount] = useState('5000');
+  const [depositAmount, setDepositAmount] = useState(String(Math.max(config.minDeposit, 1000)));
+  const [lastDeposit, setLastDeposit] = useState<FundingTransaction | null>(null);
+  const [busy, setBusy] = useState(false);
   const [depositMethod, setDepositMethod] = useState<FundingTransaction['method']>('Bank Wire');
   const [depositNotice, setDepositNotice] = useState<string | null>(null);
 
   // Withdrawal form state
-  const [withdrawAmount, setWithdrawAmount] = useState('1000');
+  const [withdrawAmount, setWithdrawAmount] = useState('');
   const [withdrawMethod, setWithdrawMethod] = useState<FundingTransaction['method']>('Bank Wire');
-  const [withdrawDestination, setWithdrawDestination] = useState('Barclays Bank UK IBAN: GB29 BUKB 2000 0084 7291 03');
+  const [withdrawDestination, setWithdrawDestination] = useState('');
   const [withdrawNotice, setWithdrawNotice] = useState<string | null>(null);
 
-  // Mock copied investors
-  const [copiedInvestors, setCopiedInvestors] = useState([
-    {
-      id: 'c1',
-      name: 'Rhys Adams',
-      handle: '@rhys_adams',
-      allocated: 4500,
-      currentValue: 5642.10,
-      profit: 1142.10,
-      profitPercent: 25.38,
-      riskScore: 4,
-      status: 'Active'
-    },
-    {
-      id: 'c2',
-      name: 'Stefan Uleia',
-      handle: '@stefan_uleia',
-      allocated: 3000,
-      currentValue: 3492.00,
-      profit: 492.00,
-      profitPercent: 16.40,
-      riskScore: 5,
-      status: 'Active'
-    }
-  ]);
+  const copiedInvestors = copies.filter(c => c.userId === currentUser.id);
 
   const userPositions = positions.filter(p => p.userId === currentUser.id);
   const userTransactions = transactions.filter(t => t.userId === currentUser.id);
@@ -144,36 +122,47 @@ export const UserDashboardModal: React.FC<UserDashboardModalProps> = ({
   const activeBalance = accountType === 'real' ? currentUser.realBalance : currentUser.virtualBalance;
 
   const handleCopyLink = () => {
-    const url = `${window.location.origin}${window.location.pathname}#user`;
+    const url = `${config.appUrl || window.location.origin}/dashboard`;
     navigator.clipboard.writeText(url);
     setCopiedLink(true);
     setTimeout(() => setCopiedLink(false), 2000);
   };
 
-  const handleDepositSubmit = (e: React.FormEvent) => {
+  const handleDepositSubmit = async (e: React.FormEvent) => {
     e.preventDefault();
     const amt = parseFloat(depositAmount);
     if (isNaN(amt) || amt <= 0) return;
-
-    submitDeposit(amt, depositMethod);
-    setDepositNotice(`Deposit request of $${amt.toLocaleString()} submitted. Queued in Admin Approvals queue.`);
-    setTimeout(() => setDepositNotice(null), 4000);
+    setBusy(true);
+    try {
+      const tx = await submitDeposit(amt, depositMethod);
+      setLastDeposit(tx);
+      setDepositNotice(`Deposit request of $${amt.toLocaleString()} submitted (ref ${tx.reference}). Payment instructions have been emailed to you.`);
+      setTimeout(() => setDepositNotice(null), 8000);
+    } catch (err) {
+      notify(errMsg(err), 'error');
+    } finally {
+      setBusy(false);
+    }
   };
 
-  const handleWithdrawalSubmit = (e: React.FormEvent) => {
+  const handleWithdrawalSubmit = async (e: React.FormEvent) => {
     e.preventDefault();
     const amt = parseFloat(withdrawAmount);
     if (isNaN(amt) || amt <= 0) return;
-
     if (amt > currentUser.realBalance) {
-      alert('Insufficient available real balance for this withdrawal.');
+      notify('Insufficient available real balance for this withdrawal.', 'error');
       return;
     }
-
-    const ok = submitWithdrawal(amt, withdrawMethod, withdrawDestination);
-    if (ok) {
-      setWithdrawNotice(`Withdrawal of $${amt.toLocaleString()} submitted for compliance release. Funds locked in escrow.`);
-      setTimeout(() => setWithdrawNotice(null), 4000);
+    setBusy(true);
+    try {
+      const tx = await submitWithdrawal(amt, withdrawMethod, withdrawDestination);
+      setWithdrawNotice(`Withdrawal of $${amt.toLocaleString()} submitted (ref ${tx.reference}). Funds reserved pending treasury release.`);
+      setWithdrawAmount('');
+      setTimeout(() => setWithdrawNotice(null), 8000);
+    } catch (err) {
+      notify(errMsg(err), 'error');
+    } finally {
+      setBusy(false);
     }
   };
 
@@ -181,29 +170,14 @@ export const UserDashboardModal: React.FC<UserDashboardModalProps> = ({
     portfolio: { title: 'Portfolio Overview & Wallet', subtitle: 'Real-time equity breakdown and allocation analytics' },
     positions: { title: 'Open CFD & Margin Positions', subtitle: 'Manage active leverage contracts and take-profit/stop-loss' },
     markets: { title: 'Live Screener & Markets', subtitle: 'Institutional execution across 5,000+ instruments' },
-    deposit: { title: 'Deposit Client Capital', subtitle: 'Segregated accounts under FCA client money protection' },
+    deposit: { title: 'Deposit Client Capital', subtitle: 'Deposit funds into your trading account' },
     withdraw: { title: 'Disburse Funds', subtitle: 'Secure disbursements to validated bank accounts' },
-    kyc: { title: 'KYC & Regulatory Verification', subtitle: 'FCA & CySEC compliant identity and address verification' },
+    kyc: { title: 'KYC & Regulatory Verification', subtitle: 'Identity and address verification' },
     inbox: { title: 'Official Communications & Inbox', subtitle: 'Regulatory dispatches, clearance notes, and broker messaging' },
     copy: { title: 'CopyTrader™ Portfolios', subtitle: 'Automatically mirror verified Pro Investors' },
     history: { title: 'Funding & Ledger History', subtitle: 'Complete immutable record of all deposits, withdrawals, and trades' },
     settings: { title: 'Account Settings & Compliance Profile', subtitle: 'Manage trading limits, leverage, and account tier' }
   };
-
-  // If user is not authenticated, show UserLoginGate
-  if (!userSession) {
-    return (
-      <div className="fixed inset-0 z-50 flex items-center justify-center p-3 sm:p-4 bg-black/90 backdrop-blur-md animate-fadeIn">
-        <UserLoginGate
-          onLoginSuccess={(session, user) => {
-            setUserSession(session);
-            setCurrentUserId(user.id);
-          }}
-          onClose={onClose}
-        />
-      </div>
-    );
-  }
 
   return (
     <div className="fixed inset-0 z-50 flex items-center justify-center p-1 sm:p-4 bg-black/90 backdrop-blur-md animate-fadeIn">
@@ -235,7 +209,7 @@ export const UserDashboardModal: React.FC<UserDashboardModalProps> = ({
                   {tabTitles[activeTab]?.title || 'Client Portal'}
                 </h2>
                 <span className="text-[10px] bg-[#6dff8a]/20 text-[#6dff8a] font-mono px-2 py-0.5 rounded font-bold uppercase">
-                  /#user
+                  /dashboard
                 </span>
               </div>
               <p className="text-xs text-[#a3a89e]">
@@ -545,8 +519,8 @@ export const UserDashboardModal: React.FC<UserDashboardModalProps> = ({
           {activeTab === 'deposit' && (
             <div className="max-w-md mx-auto space-y-5 py-4">
               <div className="text-center space-y-1">
-                <h3 className="text-xl font-bold text-white">Deposit to TradeShark</h3>
-                <p className="text-xs text-[#a3a89e]">Fund your segregated account. Submissions sync with the Admin Approvals Queue.</p>
+                <h3 className="text-xl font-bold text-white">Deposit to {config.appName}</h3>
+                <p className="text-xs text-[#a3a89e]">Fund your trading account. Submissions sync with the Admin Approvals Queue.</p>
               </div>
 
               {depositNotice && (
@@ -563,8 +537,8 @@ export const UserDashboardModal: React.FC<UserDashboardModalProps> = ({
                     <input
                       type="number"
                       required
-                      min="100"
-                      step="50"
+                      min={config.minDeposit}
+                      step="any"
                       value={depositAmount}
                       onChange={(e) => setDepositAmount(e.target.value)}
                       className="w-full bg-black/50 border border-white/15 rounded-xl pl-9 pr-4 py-3 text-white font-bold text-base focus:outline-none focus:border-[#6dff8a]"
@@ -605,12 +579,16 @@ export const UserDashboardModal: React.FC<UserDashboardModalProps> = ({
                   </div>
                 </div>
 
+                <DepositInstructions method={depositMethod} payments={payments} reference={lastDeposit?.method === depositMethod ? lastDeposit.reference : currentUser.id} />
+
                 <button
                   type="submit"
-                  className="w-full py-3.5 rounded-2xl bg-[#6dff8a] hover:bg-[#5ce077] text-[#15170f] font-bold text-sm shadow-[0_0_20px_rgba(109,255,138,0.25)] transition-all"
+                  disabled={busy}
+                  className="w-full py-3.5 rounded-2xl bg-[#6dff8a] hover:bg-[#5ce077] text-[#15170f] font-bold text-sm shadow-[0_0_20px_rgba(109,255,138,0.25)] transition-all disabled:opacity-60"
                 >
-                  Submit Deposit of ${depositAmount}
+                  {busy ? 'Submitting...' : `Submit Deposit of $${Number(depositAmount || 0).toLocaleString()}`}
                 </button>
+                <p className="text-[11px] text-white/40 text-center">Minimum deposit ${config.minDeposit}. Your balance is credited once our treasury desk confirms receipt.</p>
               </form>
             </div>
           )}
@@ -639,9 +617,10 @@ export const UserDashboardModal: React.FC<UserDashboardModalProps> = ({
                     <input
                       type="number"
                       required
-                      min="50"
+                      min={config.minWithdrawal}
                       max={currentUser.realBalance}
-                      step="50"
+                      step="any"
+                      placeholder={`Min. $${config.minWithdrawal}`}
                       value={withdrawAmount}
                       onChange={(e) => setWithdrawAmount(e.target.value)}
                       className="w-full bg-black/50 border border-white/15 rounded-xl pl-9 pr-4 py-3 text-white font-bold text-base focus:outline-none focus:border-yellow-400"
@@ -668,17 +647,24 @@ export const UserDashboardModal: React.FC<UserDashboardModalProps> = ({
                   <input
                     type="text"
                     required
+                    placeholder={withdrawMethod.includes('Crypto') ? 'Wallet address and network (e.g. TRC20)' : 'Bank name, account name, account number / IBAN, SWIFT'}
                     value={withdrawDestination}
                     onChange={(e) => setWithdrawDestination(e.target.value)}
                     className="w-full bg-black/50 border border-white/15 rounded-xl px-3.5 py-2.5 text-xs text-white focus:outline-none"
                   />
                 </div>
 
+                {currentUser.kycStatus !== 'Approved' && (
+                  <div className="p-3 rounded-xl bg-yellow-400/10 border border-yellow-400/30 text-[11px] text-yellow-300">
+                    Withdrawals require approved identity verification. <button type="button" onClick={() => setActiveTab('kyc')} className="underline font-bold">Complete KYC</button>
+                  </div>
+                )}
                 <button
                   type="submit"
-                  className="w-full py-3.5 rounded-2xl bg-yellow-400 hover:bg-yellow-500 text-black font-bold text-sm shadow-[0_0_20px_rgba(250,204,21,0.25)] transition-all"
+                  disabled={busy}
+                  className="w-full py-3.5 rounded-2xl bg-yellow-400 hover:bg-yellow-500 text-black font-bold text-sm shadow-[0_0_20px_rgba(250,204,21,0.25)] transition-all disabled:opacity-60"
                 >
-                  Request Release of ${withdrawAmount}
+                  {busy ? 'Submitting...' : `Request Release of $${Number(withdrawAmount || 0).toLocaleString()}`}
                 </button>
               </form>
             </div>
@@ -771,6 +757,12 @@ export const UserDashboardModal: React.FC<UserDashboardModalProps> = ({
                 </div>
               </div>
 
+              {copiedInvestors.length === 0 && (
+                <div className="p-8 rounded-2xl bg-white/[0.03] border border-white/10 text-center space-y-3">
+                  <p className="text-sm text-white/60">You are not copying anyone yet.</p>
+                  <a href="/popular-investors" className="inline-block px-5 py-2.5 rounded-full bg-[#6dff8a] text-[#15170f] font-bold text-xs">Browse Popular Investors</a>
+                </div>
+              )}
               <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
                 {copiedInvestors.map((inv) => (
                   <div key={inv.id} className="p-5 rounded-2xl bg-white/[0.03] border border-white/10 space-y-4">
@@ -785,7 +777,7 @@ export const UserDashboardModal: React.FC<UserDashboardModalProps> = ({
                         </div>
                       </div>
                       <span className="px-2 py-0.5 rounded-full bg-[#6dff8a]/20 text-[#6dff8a] text-[10px] font-bold">
-                        {inv.status}
+                        {inv.status} • since {inv.startedDate}
                       </span>
                     </div>
 
@@ -800,15 +792,18 @@ export const UserDashboardModal: React.FC<UserDashboardModalProps> = ({
                       </div>
                       <div>
                         <span className="text-white/40 block text-[10px]">Profit:</span>
-                        <span className="font-bold text-[#6dff8a] font-mono">+{inv.profitPercent}%</span>
+                        <span className={`font-bold font-mono ${inv.profitPercent >= 0 ? 'text-[#6dff8a]' : 'text-[#ff5c5c]'}`}>{inv.profitPercent >= 0 ? '+' : ''}{inv.profitPercent}%</span>
                       </div>
                     </div>
 
                     <div className="flex items-center justify-between pt-1">
                       <span className="text-xs text-white/50">Risk Score: <strong>{inv.riskScore} / 10</strong></span>
                       <button
-                        onClick={() => {
-                          setCopiedInvestors(prev => prev.filter(c => c.id !== inv.id));
+                        onClick={async () => {
+                          try {
+                            await stopCopy(inv.id);
+                            notify(`Stopped copying ${inv.name}. Funds returned to your balance.`);
+                          } catch (err) { notify(errMsg(err), 'error'); }
                         }}
                         className="px-3 py-1.5 rounded-lg bg-white/10 hover:bg-[#ff5c5c]/20 hover:text-[#ff5c5c] text-xs font-bold transition-colors"
                       >
@@ -824,6 +819,14 @@ export const UserDashboardModal: React.FC<UserDashboardModalProps> = ({
           {/* TAB 7: ACCOUNT & SECURITY */}
           {activeTab === 'settings' && (
             <div className="space-y-6 max-w-2xl mx-auto">
+              <SecurityPanel
+                user={currentUser}
+                onNotify={notify}
+                changePassword={changePassword}
+                updateProfile={updateProfile}
+                resendVerification={resendVerification}
+                resetPractice={resetPractice}
+              />
               <div className="p-5 rounded-3xl bg-white/[0.03] border border-white/10 space-y-4">
                 <h4 className="font-bold text-white text-sm">Regulatory &amp; Identity Verification</h4>
                 
@@ -873,7 +876,7 @@ export const UserDashboardModal: React.FC<UserDashboardModalProps> = ({
                   <div className="flex items-center justify-between p-3.5 rounded-2xl bg-black/40 border border-white/5">
                     <div>
                       <div className="font-bold text-white">Investor Protection Guarantee</div>
-                      <div className="text-white/50">FSCS Segregated Client Money protection up to £85,000 + Lloyd's $1M excess policy</div>
+                      <div className="text-white/50">Client funds kept separate from company funds</div>
                     </div>
                     <span className="px-3 py-1 rounded-full bg-[#6dff8a]/20 text-[#6dff8a] font-bold text-[11px]">
                       ACTIVE
@@ -887,6 +890,113 @@ export const UserDashboardModal: React.FC<UserDashboardModalProps> = ({
         </div>
         </div>
 
+      </div>
+    </div>
+  );
+};
+
+// ------------------------------------------------------------------
+// Deposit instructions (from admin Payment Settings / env vars)
+// ------------------------------------------------------------------
+const DepositInstructions: React.FC<{ method: string; payments: Record<string, string>; reference: string }> = ({ method, payments: p, reference }) => {
+  const [copied, setCopied] = useState<string | null>(null);
+  let rows: [string, string][] = [];
+  if (method.includes('Crypto')) {
+    rows = [['USDT (TRC20)', p.usdtTrc20], ['USDT (ERC20)', p.usdtErc20], ['Bitcoin (BTC)', p.btcAddress], ['Ethereum (ETH)', p.ethAddress]].filter(r => r[1]) as [string, string][];
+  } else if (method.includes('Card')) {
+    rows = p.cardPaymentUrl ? [['Card payment link', p.cardPaymentUrl]] : [];
+  } else {
+    rows = [['Bank', p.bankName], ['Account name', p.bankAccountName], ['Account number', p.bankAccountNumber], ['Sort code / routing', p.bankSortCode], ['IBAN', p.bankIban], ['SWIFT / BIC', p.bankSwift]].filter(r => r[1]) as [string, string][];
+  }
+  return (
+    <div className="p-4 rounded-2xl bg-black/40 border border-white/10 space-y-2 text-xs">
+      <div className="font-bold text-white">Payment instructions - {method}</div>
+      {rows.length === 0 ? (
+        <p className="text-white/60">Submit your request and our treasury desk will email you payment instructions for this method.</p>
+      ) : (
+        rows.map(([k, v]) => (
+          <div key={k} className="flex items-center justify-between gap-2">
+            <span className="text-white/50 shrink-0">{k}</span>
+            {v.startsWith('http') ? (
+              <a href={v} target="_blank" rel="noopener noreferrer" className="text-[#6dff8a] underline truncate">Open payment page</a>
+            ) : (
+              <button type="button" onClick={() => { navigator.clipboard.writeText(v); setCopied(k); setTimeout(() => setCopied(null), 1500); }} className="font-mono text-white text-right break-all hover:text-[#6dff8a]" title="Copy">
+                {v} {copied === k ? <Check className="inline w-3 h-3 text-[#6dff8a]" /> : <Copy className="inline w-3 h-3 opacity-50" />}
+              </button>
+            )}
+          </div>
+        ))
+      )}
+      <div className="flex items-center justify-between pt-1 border-t border-white/10">
+        <span className="text-white/50">Payment reference</span><span className="font-mono text-[#6dff8a]">{reference}</span>
+      </div>
+      {p.instructions && <p className="text-white/40 text-[11px]">{p.instructions}</p>}
+    </div>
+  );
+};
+
+// ------------------------------------------------------------------
+// Account security & profile
+// ------------------------------------------------------------------
+const SecurityPanel: React.FC<{
+  user: any;
+  onNotify: (m: string, t?: 'success' | 'error' | 'info') => void;
+  changePassword: (a: string, b: string) => Promise<void>;
+  updateProfile: (p: any) => Promise<void>;
+  resendVerification: () => Promise<string>;
+  resetPractice: () => Promise<void>;
+}> = ({ user, onNotify, changePassword, updateProfile, resendVerification, resetPractice }) => {
+  const [cur, setCur] = useState('');
+  const [next, setNext] = useState('');
+  const [phone, setPhone] = useState(user.phone || '');
+  const [street, setStreet] = useState(user.streetAddress || '');
+  const [city, setCity] = useState(user.city || '');
+  const [postal, setPostal] = useState(user.postalCode || '');
+  const input = 'w-full bg-black/50 border border-white/15 rounded-xl px-3 py-2 text-xs text-white focus:outline-none focus:border-[#6dff8a]';
+  const run = async (fn: () => Promise<any>, ok: string) => {
+    try { const r = await fn(); onNotify(typeof r === 'string' ? r : ok); } catch (e) { onNotify(errMsg(e), 'error'); }
+  };
+  return (
+    <div className="space-y-6">
+      <div className="p-5 rounded-3xl bg-white/[0.03] border border-white/10 space-y-3">
+        <h4 className="font-bold text-white text-sm">Profile</h4>
+        <div className="grid grid-cols-1 sm:grid-cols-2 gap-3 text-xs">
+          <div><span className="text-white/40 block">Name</span><span className="text-white font-semibold">{user.name}</span></div>
+          <div>
+            <span className="text-white/40 block">Email</span>
+            <span className="text-white font-semibold">{user.email}</span>{' '}
+            {user.emailVerified
+              ? <span className="text-[10px] text-[#6dff8a] font-bold">VERIFIED</span>
+              : <button onClick={() => run(resendVerification, 'Verification email sent')} className="text-[10px] text-yellow-400 font-bold underline">Verify email</button>}
+          </div>
+          <div><span className="text-white/40 block">Client ID</span><span className="text-white font-mono">{user.id}</span></div>
+          <div><span className="text-white/40 block">Country</span><span className="text-white">{user.country || '-'}</span></div>
+          <label className="space-y-1"><span className="text-white/40 block">Phone</span><input className={input} value={phone} onChange={e => setPhone(e.target.value)} /></label>
+          <label className="space-y-1"><span className="text-white/40 block">Street address</span><input className={input} value={street} onChange={e => setStreet(e.target.value)} /></label>
+          <label className="space-y-1"><span className="text-white/40 block">City</span><input className={input} value={city} onChange={e => setCity(e.target.value)} /></label>
+          <label className="space-y-1"><span className="text-white/40 block">Postal code</span><input className={input} value={postal} onChange={e => setPostal(e.target.value)} /></label>
+        </div>
+        <button onClick={() => run(() => updateProfile({ phone, streetAddress: street, city, postalCode: postal }), 'Profile updated')} className="px-4 py-2 rounded-xl bg-[#6dff8a] text-[#15170f] font-bold text-xs">Save profile</button>
+      </div>
+
+      <form
+        className="p-5 rounded-3xl bg-white/[0.03] border border-white/10 space-y-3"
+        onSubmit={e => { e.preventDefault(); run(async () => { await changePassword(cur, next); setCur(''); setNext(''); }, 'Password changed. A confirmation email has been sent.'); }}
+      >
+        <h4 className="font-bold text-white text-sm flex items-center gap-2"><Lock className="w-4 h-4 text-[#6dff8a]" />Change password</h4>
+        <div className="grid grid-cols-1 sm:grid-cols-2 gap-3">
+          <input type="password" required placeholder="Current password" className={input} value={cur} onChange={e => setCur(e.target.value)} />
+          <input type="password" required minLength={8} placeholder="New password (min. 8)" className={input} value={next} onChange={e => setNext(e.target.value)} />
+        </div>
+        <button className="px-4 py-2 rounded-xl bg-white/10 hover:bg-white/15 text-white font-bold text-xs">Update password</button>
+      </form>
+
+      <div className="p-5 rounded-3xl bg-white/[0.03] border border-white/10 flex items-center justify-between gap-3">
+        <div>
+          <h4 className="font-bold text-white text-sm">Practice account</h4>
+          <p className="text-xs text-white/50">Virtual balance: ${Number(user.virtualBalance || 0).toLocaleString()}</p>
+        </div>
+        <button onClick={() => run(resetPractice, 'Practice balance reset')} className="px-4 py-2 rounded-xl bg-white/10 hover:bg-white/15 text-white font-bold text-xs">Reset virtual balance</button>
       </div>
     </div>
   );

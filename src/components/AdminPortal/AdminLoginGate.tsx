@@ -8,6 +8,8 @@ import {
   Key
 } from 'lucide-react';
 import { TradeSharkLogo } from '../TradeSharkLogo';
+import { useBrokerage } from '../../context/BrokerageContext';
+import { errMsg } from '../../lib/api';
 
 export interface AdminSession {
   username: string;
@@ -18,12 +20,6 @@ export interface AdminSession {
   sessionType: '30m' | '4h' | '24h' | 'tab';
   token: string;
 }
-
-const VALID_ACCOUNTS = [
-  { username: 'admin', password: 'admin123', role: 'Super-Admin', name: 'Administrator' },
-  { username: 'compliance', password: 'compliance123', role: 'Compliance Officer', name: 'Compliance Desk' },
-  { username: 'treasury', password: 'treasury123', role: 'Treasury Desk', name: 'Treasury Operator' }
-];
 
 interface AdminLoginGateProps {
   onLoginSuccess: (session: AdminSession) => void;
@@ -36,6 +32,7 @@ export const AdminLoginGate: React.FC<AdminLoginGateProps> = ({
   onClose,
   sessionExpiredNotice = false
 }) => {
+  const { loginAdmin } = useBrokerage();
   const [username, setUsername] = useState('');
   const [password, setPassword] = useState('');
   const [showPassword, setShowPassword] = useState(false);
@@ -43,48 +40,26 @@ export const AdminLoginGate: React.FC<AdminLoginGateProps> = ({
   const [errorMessage, setErrorMessage] = useState<string | null>(null);
   const [isLoading, setIsLoading] = useState(false);
 
-  const handleLogin = (e?: React.FormEvent) => {
+  const handleLogin = async (e?: React.FormEvent) => {
     if (e) e.preventDefault();
     setErrorMessage(null);
     setIsLoading(true);
-
-    setTimeout(() => {
-      const trimmedUser = username.trim().toLowerCase();
-      const matched = VALID_ACCOUNTS.find(
-        c => c.username.toLowerCase() === trimmedUser && c.password === password
-      );
-
-      if (!matched) {
-        setIsLoading(false);
-        setErrorMessage('Invalid username or password.');
-        return;
-      }
-
-      const now = Date.now();
-      const sessionType: AdminSession['sessionType'] = rememberMe ? '24h' : 'tab';
-      const expiresAt = rememberMe ? now + 24 * 60 * 60 * 1000 : now + 8 * 60 * 60 * 1000;
-
-      const session: AdminSession = {
-        username: matched.username,
-        role: matched.role,
-        name: matched.name,
-        loginTime: now,
-        expiresAt,
-        sessionType,
-        token: `ts_adm_${Math.random().toString(36).substring(2)}${Date.now()}`
-      };
-
-      if (!rememberMe) {
-        sessionStorage.setItem('tradeshark_admin_session', JSON.stringify(session));
-        localStorage.removeItem('tradeshark_admin_session');
-      } else {
-        localStorage.setItem('tradeshark_admin_session', JSON.stringify(session));
-        sessionStorage.removeItem('tradeshark_admin_session');
-      }
-
+    try {
+      const a = await loginAdmin(username.trim(), password, rememberMe);
+      onLoginSuccess({
+        username: a.username,
+        role: a.role,
+        name: a.name,
+        loginTime: Date.now(),
+        expiresAt: a.expiresAt,
+        sessionType: rememberMe ? '24h' : 'tab',
+        token: 'cookie',
+      });
+    } catch (err) {
+      setErrorMessage(errMsg(err));
+    } finally {
       setIsLoading(false);
-      onLoginSuccess(session);
-    }, 350);
+    }
   };
 
   return (
@@ -126,11 +101,11 @@ export const AdminLoginGate: React.FC<AdminLoginGateProps> = ({
             </div>
             <div className="flex items-center justify-between">
               <span className="text-white/60">Escrow Vault</span>
-              <span className="text-white font-mono font-semibold">Tier-1 Segregated</span>
+              <span className="text-white font-mono font-semibold">Separate client funds</span>
             </div>
             <div className="flex items-center justify-between">
               <span className="text-white/60">Audit Protocol</span>
-              <span className="text-yellow-400 font-mono font-semibold">FCA Hash-Chain</span>
+              <span className="text-yellow-400 font-mono font-semibold">Audit Trail</span>
             </div>
           </div>
           <p className="text-[10px] text-white/50">
@@ -237,36 +212,6 @@ export const AdminLoginGate: React.FC<AdminLoginGateProps> = ({
           </button>
         </form>
 
-        {/* Quick Fill Credentials Helper */}
-        <div className="mt-4 pt-3.5 border-t border-white/10 space-y-2">
-          <div className="flex items-center justify-between text-[11px] text-white/60">
-            <span className="font-semibold text-white/80">Authorized Staff Desks:</span>
-            <span className="text-[10px] text-[#6dff8a]">Click to autofill</span>
-          </div>
-
-          <div className="grid grid-cols-3 gap-1.5">
-            {VALID_ACCOUNTS.map((acc, i) => (
-              <button
-                key={i}
-                type="button"
-                onClick={() => {
-                  setUsername(acc.username);
-                  setPassword(acc.password);
-                  setErrorMessage(null);
-                }}
-                className={`p-2 rounded-xl text-left border transition-all cursor-pointer ${
-                  username.toLowerCase() === acc.username.toLowerCase()
-                    ? 'bg-[#6dff8a]/15 border-[#6dff8a] text-white'
-                    : 'bg-black/40 border-white/10 hover:border-white/20 text-white/80 hover:text-white'
-                }`}
-              >
-                <div className="font-mono text-[11px] font-bold text-[#6dff8a] truncate">{acc.username}</div>
-                <div className="text-[10px] text-white/50 truncate">{acc.password}</div>
-                <div className="text-[9px] text-white/40 truncate">{acc.role.split(' ')[0]}</div>
-              </button>
-            ))}
-          </div>
-        </div>
       </div>
     </div>
   );

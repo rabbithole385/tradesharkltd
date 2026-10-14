@@ -1,4 +1,5 @@
 import React from 'react';
+import { useBrokerage } from '../context/BrokerageContext';
 
 interface TradeSharkLogoProps {
   className?: string;
@@ -11,6 +12,12 @@ export const TradeSharkLogo: React.FC<TradeSharkLogoProps> = ({
   size = 'md',
   showLtd = true 
 }) => {
+  const { config } = useBrokerage();
+  const name = config.appName || 'TradeShark';
+  // "TradeShark" -> "Trade" + "Shark"; "Nova Markets" -> "Nova" + " Markets"
+  const m = name.match(/^(.+?)([A-Z][a-z0-9]+.*|\s.+)$/);
+  const [first, second] = m ? [m[1], m[2]] : [name, ''];
+  const suffix = (config.legalName.match(/\b(Ltd|Limited|LLC|Inc|PLC|GmbH|Sp\. z o\.o\.)\.?$/i) || [])[1];
   const iconSizes = {
     sm: 'h-6 w-6',
     md: 'h-7 w-7',
@@ -38,11 +45,11 @@ export const TradeSharkLogo: React.FC<TradeSharkLogoProps> = ({
 
       <div className="flex items-center gap-1.5">
         <span className={`font-bold tracking-tight text-white ${textSizes[size]}`}>
-          Trade<span className="text-[#6dff8a]">Shark</span>
+          {first}<span className="text-[#6dff8a]">{second}</span>
         </span>
-        {showLtd && (
+        {showLtd && suffix && (
           <span className="text-[10px] font-semibold tracking-wider text-[#6dff8a]/90 bg-[#6dff8a]/10 border border-[#6dff8a]/30 rounded px-1 py-0.2 uppercase">
-            Ltd
+            {suffix === 'Limited' ? 'Ltd' : suffix}
           </span>
         )}
       </div>

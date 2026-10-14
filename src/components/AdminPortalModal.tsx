@@ -42,23 +42,28 @@ import { TradeSharkLogo } from './TradeSharkLogo';
 import { useBrokerage } from '../context/BrokerageContext';
 import { UserAccount, UserTier, AccountStatus, FundingTransaction } from '../types';
 import { AdminSidebar, AdminTab } from './AdminPortal/AdminSidebar';
+import { AdminCopyTraderTab } from './AdminPortal/AdminCopyTraderTab';
 import { AdminEmailsTab } from './AdminPortal/AdminEmailsTab';
 import { AdminKycInspectorModal } from './AdminPortal/AdminKycInspectorModal';
 import { AdminLoginGate, AdminSession } from './AdminPortal/AdminLoginGate';
 
 interface AdminPortalModalProps {
   isOpen: boolean;
+  initialTab?: string;
   onClose: () => void;
   onSwitchToUserDashboard?: () => void;
 }
 
-export const AdminPortalModal: React.FC<AdminPortalModalProps> = ({ 
-  isOpen, 
+const ADMIN_TABS: AdminTab[] = ['overview', 'users', 'setup', 'kyc', 'funding', 'emails', 'markets', 'copytrader', 'audit', 'settings'];
+
+export const AdminPortalModal: React.FC<AdminPortalModalProps> = (props) =>
+  props.isOpen ? <AdminPortalInner {...props} /> : null;
+
+const AdminPortalInner: React.FC<AdminPortalModalProps> = ({ 
+  initialTab,
   onClose,
   onSwitchToUserDashboard
 }) => {
-  if (!isOpen) return null;
-
   const {
     users,
     currentUser,
@@ -66,8 +71,10 @@ export const AdminPortalModal: React.FC<AdminPortalModalProps> = ({
     transactions,
     auditLogs,
     emails,
+    positions,
+    marketAssets,
+    payments,
     createUser,
-    updateUser,
     setUserStatus,
     toggleTradingPermission,
     updateUserTier,
@@ -78,64 +85,41 @@ export const AdminPortalModal: React.FC<AdminPortalModalProps> = ({
     updateAmlRisk,
     approveFunding,
     rejectFunding,
-    manualBalanceAdjustment
+    manualBalanceAdjustment,
+    adminSession: ctxAdmin,
+    logoutAdmin,
+    toggleAssetHalt,
+    savePayments,
+    sendPasswordReset,
+    deleteUser,
+    closePosition,
+    refresh,
+    notify
   } = useBrokerage();
 
-  const [activeTab, setActiveTab] = useState<AdminTab>('overview');
+  const [activeTab, setActiveTab] = useState<AdminTab>(() => (ADMIN_TABS.includes(initialTab as AdminTab) ? initialTab as AdminTab : 'overview'));
   const [notification, setNotification] = useState<string | null>(null);
   const [searchTerm, setSearchTerm] = useState('');
   const [statusFilter, setStatusFilter] = useState<'ALL' | AccountStatus>('ALL');
   const [copiedLink, setCopiedLink] = useState(false);
 
-  // Admin Authentication & Session Management
-  const [adminSession, setAdminSession] = useState<AdminSession | null>(() => {
-    try {
-      // 1. Check single-tab browser session
-      const tabStr = sessionStorage.getItem('tradeshark_admin_session');
-      if (tabStr) {
-        const parsed = JSON.parse(tabStr) as AdminSession;
-        if (Date.now() < parsed.expiresAt) {
-          return parsed;
-        } else {
-          sessionStorage.removeItem('tradeshark_admin_session');
-        }
-      }
-      // 2. Check persistent session
-      const localStr = localStorage.getItem('tradeshark_admin_session');
-      if (localStr) {
-        const parsed = JSON.parse(localStr) as AdminSession;
-        if (Date.now() < parsed.expiresAt) {
-          return parsed;
-        } else {
-          localStorage.removeItem('tradeshark_admin_session');
-        }
-      }
-    } catch (e) {
-      console.error('Error reading admin session from storage', e);
-    }
-    return null;
-  });
-
+  // Admin session comes from the server (HTTP-only cookie)
+  const adminSession: AdminSession | null = ctxAdmin
+    ? { username: ctxAdmin.username, role: ctxAdmin.role, name: ctxAdmin.name, loginTime: Date.now(), expiresAt: ctxAdmin.expiresAt, sessionType: '24h', token: 'cookie' }
+    : null;
   const [sessionExpiredNotice, setSessionExpiredNotice] = useState(false);
 
-  // Periodic expiration watcher
   React.useEffect(() => {
-    if (!adminSession) return;
+    if (!ctxAdmin) return;
     const interval = setInterval(() => {
-      if (Date.now() >= adminSession.expiresAt) {
-        handleLogout(true);
-      }
-    }, 5000);
+      if (Date.now() >= ctxAdmin.expiresAt) handleLogout(true);
+    }, 15000);
     return () => clearInterval(interval);
-  }, [adminSession]);
+  }, [ctxAdmin]);
 
-  const handleLogout = (wasExpired = false) => {
-    sessionStorage.removeItem('tradeshark_admin_session');
-    localStorage.removeItem('tradeshark_admin_session');
-    setAdminSession(null);
-    if (wasExpired) {
-      setSessionExpiredNotice(true);
-    }
+  const handleLogout = async (wasExpired = false) => {
+    await logoutAdmin();
+    if (wasExpired) setSessionExpiredNotice(true);
   };
 
   // Selected User for Deep Account Control
@@ -160,7 +144,7 @@ export const AdminPortalModal: React.FC<AdminPortalModalProps> = ({
   // New User Setup Form State
   const [newUserName, setNewUserName] = useState('');
   const [newUserEmail, setNewUserEmail] = useState('');
-  const [newUserPhone, setNewUserPhone] = useState('+44 ');
+  const [newUserPhone, setNewUserPhone] = useState('');
   const [newUserCountry, setNewUserCountry] = useState('United Kingdom');
   const [newUserTier, setNewUserTier] = useState<UserTier>('Tier 2 - Verified Pro');
   const [newUserCurrency, setNewUserCurrency] = useState<'USD' | 'EUR' | 'GBP'>('USD');
@@ -174,30 +158,14 @@ export const AdminPortalModal: React.FC<AdminPortalModalProps> = ({
   const [newUserAllowCrypto, setNewUserAllowCrypto] = useState(true);
   const [newUserAccountManager, setNewUserAccountManager] = useState('David Sterling');
 
-  // Mock Market Assets State
-  const [marketAssets, setMarketAssets] = useState([
-    { symbol: 'NVDA', name: 'NVIDIA Corp', category: 'Stocks', price: 218.15, spread: '0.02%', status: 'Active', halted: false },
-    { symbol: 'BTC', name: 'Bitcoin', category: 'Crypto', price: 91420.00, spread: '0.30%', status: 'Active', halted: false },
-    { symbol: 'SPY', name: 'S&P 500 ETF', category: 'ETFs', price: 546.80, spread: '0.00%', status: 'Active', halted: false },
-    { symbol: 'TSLA', name: 'Tesla Motors', category: 'Stocks', price: 428.37, spread: '0.04%', status: 'Active', halted: false },
-    { symbol: 'GOLD', name: 'Gold Bullion', category: 'Commodities', price: 2748.50, spread: '0.05%', status: 'Active', halted: false },
-    { symbol: 'EUR/USD', name: 'Euro / US Dollar', category: 'Currencies', price: 1.0842, spread: '0.01%', status: 'Active', halted: false },
-  ]);
-
   const showToast = (msg: string) => {
     setNotification(msg);
     setTimeout(() => setNotification(null), 3500);
   };
 
   const toggleHalt = (symbol: string) => {
-    setMarketAssets(prev => prev.map(a => {
-      if (a.symbol === symbol) {
-        const nextHalted = !a.halted;
-        showToast(`Asset ${symbol} trading ${nextHalted ? 'HALTED' : 'RESUMED'}`);
-        return { ...a, halted: nextHalted, status: nextHalted ? 'Halted' : 'Active' };
-      }
-      return a;
-    }));
+    const asset = marketAssets.find(a => a.symbol === symbol);
+    if (asset) toggleAssetHalt(symbol, !asset.halted);
   };
 
   // Pending counts
@@ -205,11 +173,13 @@ export const AdminPortalModal: React.FC<AdminPortalModalProps> = ({
   const pendingFundingCount = transactions.filter(t => t.status === 'Pending Approval').length;
 
   // Handle New User Creation
-  const handleCreateUserSubmit = (e: React.FormEvent) => {
+  const handleCreateUserSubmit = async (e: React.FormEvent) => {
     e.preventDefault();
     if (!newUserName || !newUserEmail) return;
 
-    const created = createUser({
+    let created: UserAccount;
+    try {
+    created = await createUser({
       name: newUserName,
       email: newUserEmail,
       phone: newUserPhone,
@@ -233,8 +203,12 @@ export const AdminPortalModal: React.FC<AdminPortalModalProps> = ({
       maxPositionLimit: newUserTier.includes('VIP') ? 1000000 : 250000,
       accountManager: newUserAccountManager
     });
+    } catch (err: any) {
+      showToast(err?.message || 'Could not create account');
+      return;
+    }
 
-    showToast(`Account successfully provisioned for ${created.name} (${created.id})`);
+    showToast(`Account provisioned for ${created.name} (${created.id}). A set-password email has been sent.`);
     // Reset form
     setNewUserName('');
     setNewUserEmail('');
@@ -282,7 +256,7 @@ export const AdminPortalModal: React.FC<AdminPortalModalProps> = ({
   ).length;
 
   const handleCopyLink = () => {
-    const url = `${window.location.origin}${window.location.pathname}#admin`;
+    const url = `${window.location.origin}/admin`;
     navigator.clipboard.writeText(url);
     setCopiedLink(true);
     setTimeout(() => setCopiedLink(false), 2000);
@@ -292,11 +266,13 @@ export const AdminPortalModal: React.FC<AdminPortalModalProps> = ({
     overview: { title: 'Executive Overview & Broker Operations', subtitle: 'Global order flow, liquidity matching, and institutional capital tracking' },
     users: { title: 'User Account Registry & Permissions', subtitle: 'Real-time trader governance, balance adjustments, and risk tiers' },
     setup: { title: 'Setup & Provision Account', subtitle: 'Direct onboarding for institutional, VIP, and accredited retail traders' },
-    kyc: { title: 'KYC & Biometrics Verification Desk', subtitle: 'FCA/CySEC compliant passport, ID, and liveness verification audit' },
+    kyc: { title: 'KYC & Biometrics Verification Desk', subtitle: 'Passport, ID, address and selfie verification audit' },
     funding: { title: 'Funding Approvals & Capital Queue', subtitle: 'Treasury desk clearance for deposits and withdrawals' },
     emails: { title: 'Email Dispatch & Client Communications', subtitle: 'Automated compliance notices, margin calls, and broadcast announcements' },
     markets: { title: 'Market Trading & Risk Controls', subtitle: 'Dynamic spread overrides, circuit breaker halting, and slippage management' },
-    audit: { title: 'Regulatory Compliance Audit Trail', subtitle: 'Immutable administrative logs with millisecond timestamps' }
+    copytrader: { title: 'CopyTrader & Popular Investors', subtitle: 'Add, edit or hide investors and manage every client copy portfolio' },
+    audit: { title: 'Regulatory Compliance Audit Trail', subtitle: 'Immutable administrative logs with millisecond timestamps' },
+    settings: { title: 'Payment & Deposit Settings', subtitle: 'Bank and crypto details shown to clients and included in deposit emails' }
   };
 
   if (!adminSession) {
@@ -308,7 +284,6 @@ export const AdminPortalModal: React.FC<AdminPortalModalProps> = ({
         <div onClick={(e) => e.stopPropagation()}>
           <AdminLoginGate
             onLoginSuccess={(newSession) => {
-              setAdminSession(newSession);
               setSessionExpiredNotice(false);
               setNotification(`Authenticated as ${newSession.name} (${newSession.role})`);
               setTimeout(() => setNotification(null), 4000);
@@ -486,7 +461,7 @@ export const AdminPortalModal: React.FC<AdminPortalModalProps> = ({
                     <span className="text-2xl font-bold text-white font-mono">$842,610,940</span>
                     <div className="text-[11px] text-[#6dff8a] flex items-center gap-1">
                       <CheckCircle2 className="w-3 h-3" />
-                      <span>100% Segregated Tier-1 Bank</span>
+                      <span>Client funds kept separate</span>
                     </div>
                   </div>
 
@@ -523,7 +498,7 @@ export const AdminPortalModal: React.FC<AdminPortalModalProps> = ({
                       <p className="text-xs text-[#a3a89e]">Instant operational execution across user accounts, treasury, and compliance</p>
                     </div>
                     <span className="px-2.5 py-0.5 rounded-full bg-[#6dff8a]/10 border border-[#6dff8a]/30 text-[#6dff8a] text-xs font-bold">
-                      FCA &amp; CySEC Dual Licensed
+                      Compliance Desk
                     </span>
                   </div>
 
@@ -621,11 +596,11 @@ export const AdminPortalModal: React.FC<AdminPortalModalProps> = ({
                     <div className="space-y-2 text-white/70">
                       <div className="flex justify-between py-1 border-b border-white/5">
                         <span>Regulatory Authorities:</span>
-                        <strong className="text-white">FCA (UK) &amp; CySEC (EU)</strong>
+                        <strong className="text-white">KYC / AML</strong>
                       </div>
                       <div className="flex justify-between py-1 border-b border-white/5">
                         <span>Client Money Protection:</span>
-                        <strong className="text-[#6dff8a]">FCSC £85k + £1M Excess Lloyd's</strong>
+                        <strong className="text-[#6dff8a]">Separate client funds</strong>
                       </div>
                       <div className="flex justify-between py-1 border-b border-white/5">
                         <span>Automated Email Clearance:</span>
@@ -640,6 +615,10 @@ export const AdminPortalModal: React.FC<AdminPortalModalProps> = ({
             {/* TAB: EMAILING SYSTEM */}
             {activeTab === 'emails' && (
               <AdminEmailsTab onNotify={showToast} />
+            )}
+
+            {activeTab === 'copytrader' && (
+              <AdminCopyTraderTab onNotify={showToast} />
             )}
 
           {/* TAB 1: ACCOUNTS & CONTROLS */}
@@ -698,7 +677,7 @@ export const AdminPortalModal: React.FC<AdminPortalModalProps> = ({
                     </thead>
                     <tbody className="divide-y divide-white/10">
                       {filteredUsers.map((u) => {
-                        const isCurrent = currentUser.id === u.id;
+                        const isCurrent = currentUser?.id === u.id;
                         return (
                           <tr key={u.id} className={`hover:bg-white/[0.02] transition-colors ${isCurrent ? 'bg-[#6dff8a]/[0.03]' : ''}`}>
                             {/* User Info */}
@@ -823,7 +802,6 @@ export const AdminPortalModal: React.FC<AdminPortalModalProps> = ({
                               <button
                                 onClick={() => {
                                   setCurrentUserId(u.id);
-                                  showToast(`Switched active user session to ${u.name}`);
                                 }}
                                 className={`px-2 py-1 rounded-lg text-[11px] font-semibold transition-colors ${
                                   isCurrent 
@@ -877,7 +855,7 @@ export const AdminPortalModal: React.FC<AdminPortalModalProps> = ({
                     ${transactions.filter(t => t.status === 'Approved / Settled')
                       .reduce((acc, t) => acc + t.amount, 0).toLocaleString()}
                   </span>
-                  <span className="text-[11px] text-[#6dff8a]">Cleared with segregated custodian</span>
+                  <span className="text-[11px] text-[#6dff8a]">Cleared by treasury desk</span>
                 </div>
               </div>
 
@@ -1196,7 +1174,7 @@ export const AdminPortalModal: React.FC<AdminPortalModalProps> = ({
                       onChange={(e) => setNewUserLeverage(e.target.value)}
                       className="w-full bg-black/50 border border-white/15 rounded-xl px-3.5 py-2.5 text-xs text-white focus:outline-none focus:border-[#6dff8a]"
                     >
-                      <option value="30">1:30 (FCA / ESMA Standard)</option>
+                      <option value="30">1:30 (Standard retail)</option>
                       <option value="100">1:100 (Pro Investor)</option>
                       <option value="200">1:200 (Experienced Trader)</option>
                       <option value="400">1:400 (VIP Institutional)</option>
@@ -1303,7 +1281,7 @@ export const AdminPortalModal: React.FC<AdminPortalModalProps> = ({
                   <p className="text-xs text-[#a3a89e]">Emergency halt trading, adjust spreads, and inspect liquidity feeds.</p>
                 </div>
                 <button
-                  onClick={() => showToast('All asset prices synced with Thomson Reuters & Bloomberg feeds.')}
+                  onClick={() => { refresh(); showToast('Prices and data refreshed.'); }}
                   className="px-4 py-2 rounded-xl bg-white/10 hover:bg-white/15 text-white font-semibold text-xs flex items-center gap-2 transition-colors"
                 >
                   <RefreshCw className="w-3.5 h-3.5 text-[#6dff8a]" />
@@ -1360,6 +1338,13 @@ export const AdminPortalModal: React.FC<AdminPortalModalProps> = ({
             </div>
           )}
 
+          {activeTab === 'settings' && (
+            <PaymentSettingsTab payments={payments} onSave={async (p) => {
+              try { await savePayments(p); showToast('Payment settings saved. New deposits will show these details.'); }
+              catch (err: any) { showToast(err?.message || 'Could not save settings'); }
+            }} />
+          )}
+
           {/* TAB 6: AUDIT TRAIL */}
           {activeTab === 'audit' && (
             <div className="space-y-4">
@@ -1368,12 +1353,14 @@ export const AdminPortalModal: React.FC<AdminPortalModalProps> = ({
                   <h3 className="text-base font-bold text-white">Immutable Regulatory Audit Trail</h3>
                   <p className="text-xs text-[#a3a89e]">Real-time system events, administrative balance changes, and KYC decisions.</p>
                 </div>
-                <button
-                  onClick={() => showToast('Exported audit logs to compliance CSV file.')}
-                  className="px-4 py-2 rounded-xl bg-[#6dff8a] text-[#15170f] font-bold text-xs"
-                >
-                  Export CSV Logs
-                </button>
+                <div className="flex gap-2">
+                  <a href="/api/admin/users.csv" data-native className="px-4 py-2 rounded-xl bg-white/10 text-white font-bold text-xs">
+                    Export Clients CSV
+                  </a>
+                  <a href="/api/admin/audit.csv" data-native className="px-4 py-2 rounded-xl bg-[#6dff8a] text-[#15170f] font-bold text-xs">
+                    Export CSV Logs
+                  </a>
+                </div>
               </div>
 
               <div className="border border-white/10 rounded-2xl overflow-hidden bg-black/40 p-4 space-y-2 max-h-[60vh] overflow-y-auto font-mono text-xs">
@@ -1705,7 +1692,8 @@ export const AdminPortalModal: React.FC<AdminPortalModalProps> = ({
       {/* KYC Inspector Modal */}
       {selectedKycInspectorUser && (
         <AdminKycInspectorModal
-          user={selectedKycInspectorUser}
+          isOpen={true}
+          user={users.find(u => u.id === selectedKycInspectorUser.id) || selectedKycInspectorUser}
           onClose={() => setSelectedKycInspectorUser(null)}
           onApprove={(userId) => {
             approveKyc(userId);
@@ -1726,5 +1714,61 @@ export const AdminPortalModal: React.FC<AdminPortalModalProps> = ({
       )}
 
     </div>
+  );
+};
+
+// ------------------------------------------------------------------
+// Payment settings (bank / crypto details for deposits)
+// ------------------------------------------------------------------
+const PAYMENT_FIELDS: { key: string; label: string; group: string; placeholder?: string }[] = [
+  { key: 'bankName', label: 'Bank name', group: 'Bank transfer' },
+  { key: 'bankAccountName', label: 'Account name', group: 'Bank transfer' },
+  { key: 'bankAccountNumber', label: 'Account number', group: 'Bank transfer' },
+  { key: 'bankSortCode', label: 'Sort code / routing number', group: 'Bank transfer' },
+  { key: 'bankIban', label: 'IBAN', group: 'Bank transfer' },
+  { key: 'bankSwift', label: 'SWIFT / BIC', group: 'Bank transfer' },
+  { key: 'usdtTrc20', label: 'USDT (TRC20) address', group: 'Crypto' },
+  { key: 'usdtErc20', label: 'USDT (ERC20) address', group: 'Crypto' },
+  { key: 'btcAddress', label: 'Bitcoin address', group: 'Crypto' },
+  { key: 'ethAddress', label: 'Ethereum address', group: 'Crypto' },
+  { key: 'cardPaymentUrl', label: 'Card payment link (Stripe/Paystack/Flutterwave checkout URL)', group: 'Card', placeholder: 'https://' },
+  { key: 'instructions', label: 'Extra instructions shown to clients', group: 'General' },
+];
+
+const PaymentSettingsTab: React.FC<{ payments: Record<string, string>; onSave: (p: Record<string, string>) => Promise<void> }> = ({ payments, onSave }) => {
+  const [form, setForm] = useState<Record<string, string>>(() => ({ ...payments }));
+  const [saving, setSaving] = useState(false);
+  const groups = Array.from(new Set(PAYMENT_FIELDS.map(f => f.group)));
+  return (
+    <form
+      className="space-y-6 max-w-3xl"
+      onSubmit={async e => { e.preventDefault(); setSaving(true); await onSave(form); setSaving(false); }}
+    >
+      <p className="text-xs text-white/50">
+        These details appear on the client Deposit tab and in every deposit confirmation email. Leave a field empty to hide it.
+        Initial values come from the DEPOSIT_* Railway variables.
+      </p>
+      {groups.map(g => (
+        <div key={g} className="p-5 rounded-2xl bg-white/[0.03] border border-white/10 space-y-3">
+          <h4 className="text-sm font-bold text-white">{g}</h4>
+          <div className="grid grid-cols-1 sm:grid-cols-2 gap-3">
+            {PAYMENT_FIELDS.filter(f => f.group === g).map(f => (
+              <label key={f.key} className={`space-y-1 ${f.key === 'instructions' || f.key === 'cardPaymentUrl' ? 'sm:col-span-2' : ''}`}>
+                <span className="text-[11px] text-white/50">{f.label}</span>
+                <input
+                  value={form[f.key] || ''}
+                  placeholder={f.placeholder}
+                  onChange={e => setForm(prev => ({ ...prev, [f.key]: e.target.value }))}
+                  className="w-full bg-black/40 border border-white/15 rounded-lg px-3 py-2 text-xs text-white font-mono focus:outline-none focus:border-[#6dff8a]"
+                />
+              </label>
+            ))}
+          </div>
+        </div>
+      ))}
+      <button disabled={saving} className="px-6 py-2.5 rounded-xl bg-[#6dff8a] text-[#15170f] font-bold text-xs disabled:opacity-60">
+        {saving ? 'Saving...' : 'Save payment settings'}
+      </button>
+    </form>
   );
 };

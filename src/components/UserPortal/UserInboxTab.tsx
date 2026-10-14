@@ -26,7 +26,7 @@ interface UserInboxTabProps {
 }
 
 export const UserInboxTab: React.FC<UserInboxTabProps> = ({ currentUser, onNotify }) => {
-  const { emails, markEmailAsRead, sendEmail } = useBrokerage();
+  const { emails, markEmailAsRead, sendEmail, config } = useBrokerage();
 
   const [selectedEmailId, setSelectedEmailId] = useState<string | null>(null);
   const [searchQuery, setSearchQuery] = useState('');
@@ -60,16 +60,17 @@ export const UserInboxTab: React.FC<UserInboxTabProps> = ({ currentUser, onNotif
     }
   };
 
-  const handleSendInquiry = (e: React.FormEvent) => {
+  const handleSendInquiry = async (e: React.FormEvent) => {
     e.preventDefault();
     if (!inquirySubject.trim() || !inquiryBody.trim()) {
       onNotify('Please complete subject and message body');
       return;
     }
 
-    sendEmail({
+    try {
+    await sendEmail({
       from: `${currentUser.name} <${currentUser.email}>`,
-      to: 'TradeShark Institutional Client Desk <desk@tradeshark.co.uk>',
+      to: 'Client Desk',
       userId: currentUser.id,
       userName: currentUser.name,
       subject: inquirySubject,
@@ -78,8 +79,12 @@ export const UserInboxTab: React.FC<UserInboxTabProps> = ({ currentUser, onNotif
       priority: 'Normal',
       direction: 'inbound'
     });
+    } catch (err: any) {
+      onNotify(err?.message || 'Could not send your message');
+      return;
+    }
 
-    onNotify('Support inquiry dispatched to your assigned account executive');
+    onNotify('Message sent to our client desk. We will reply to your inbox and email.');
     setInquirySubject('');
     setInquiryBody('');
     setIsComposing(false);
@@ -235,7 +240,7 @@ export const UserInboxTab: React.FC<UserInboxTabProps> = ({ currentUser, onNotif
               {/* Reader Footer with Reply Action */}
               <div className="p-4 border-t border-white/10 bg-black/30 flex items-center justify-between">
                 <div className="text-[10px] text-white/40">
-                  TradeShark Ltd • Authorised and Regulated by Financial Conduct Authority
+                  {config.legalName}
                 </div>
 
                 <button
@@ -298,7 +303,7 @@ export const UserInboxTab: React.FC<UserInboxTabProps> = ({ currentUser, onNotif
                   <input
                     type="text"
                     disabled
-                    value={currentUser.assignedOfficer || 'David Sterling (Executive Desk)'}
+                    value={currentUser.accountManager || 'David Sterling (Executive Desk)'}
                     className="w-full bg-black/30 border border-white/10 rounded-xl px-3 py-2 text-white/50"
                   />
                 </div>

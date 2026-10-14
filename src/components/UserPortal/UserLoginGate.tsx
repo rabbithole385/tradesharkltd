@@ -1,4 +1,4 @@
-import React, { useState } from 'react';
+import React, { useState, useEffect } from 'react';
 import { 
   Lock, 
   Mail, 
@@ -14,8 +14,12 @@ import {
   Phone
 } from 'lucide-react';
 import { TradeSharkLogo } from '../TradeSharkLogo';
-import { useBrokerage } from '../../context/BrokerageContext';
+import { useBrokerage, isLoginChallenge, LoginChallenge } from '../../context/BrokerageContext';
+import { OtpStep } from '../OtpStep';
 import { UserAccount } from '../../types';
+import { errMsg } from '../../lib/api';
+import { navigate } from '../../lib/router';
+import { COUNTRIES } from '../../data/countries';
 
 export interface UserSession {
   userId: string;
@@ -35,7 +39,7 @@ export const UserLoginGate: React.FC<UserLoginGateProps> = ({
   onLoginSuccess,
   onClose
 }) => {
-  const { users, createUser, setCurrentUserId } = useBrokerage();
+  const { loginUser, registerUser, config } = useBrokerage();
 
   const [mode, setMode] = useState<'login' | 'register'>('login');
   
@@ -43,139 +47,57 @@ export const UserLoginGate: React.FC<UserLoginGateProps> = ({
   const [loginIdentifier, setLoginIdentifier] = useState('');
   const [loginPassword, setLoginPassword] = useState('');
   const [showPassword, setShowPassword] = useState(false);
-  const [rememberMe, setRememberMe] = useState(false);
+  const [rememberMe, setRememberMe] = useState(true);
 
   // Register Fields
   const [regName, setRegName] = useState('');
   const [regEmail, setRegEmail] = useState('');
   const [regPassword, setRegPassword] = useState('');
   const [regPhone, setRegPhone] = useState('');
-  const [regCountry, setRegCountry] = useState('United Kingdom');
-  const [regAgreed, setRegAgreed] = useState(true);
+  const [regCountry, setRegCountry] = useState('');
+  const [regAgreed, setRegAgreed] = useState(false);
 
   // Status & Feedback
   const [errorMessage, setErrorMessage] = useState<string | null>(null);
   const [isLoading, setIsLoading] = useState(false);
+  const [otp, setOtp] = useState<LoginChallenge | null>(null);
 
-  // Handle Login
-  const handleLoginSubmit = (e: React.FormEvent) => {
+  const toSession = (user: UserAccount, remember: boolean): UserSession => ({
+    userId: user.id,
+    name: user.name,
+    email: user.email,
+    loginTime: Date.now(),
+    expiresAt: Date.now() + (remember ? 30 : 0.5) * 24 * 3600 * 1000,
+    sessionType: remember ? '24h' : 'tab',
+  });
+
+  const handleLoginSubmit = async (e: React.FormEvent) => {
     e.preventDefault();
     setErrorMessage(null);
     setIsLoading(true);
-
-    setTimeout(() => {
-      const search = loginIdentifier.trim().toLowerCase();
-      
-      // Look up user in the actual data system
-      const foundUser = users.find(u => 
-        u.email.toLowerCase() === search || 
-        u.name.toLowerCase() === search ||
-        u.id.toLowerCase() === search
-      );
-
-      if (!foundUser) {
-        setIsLoading(false);
-        setErrorMessage('Account details not found in the TradeShark data system. Please check your email or register a new trading account.');
-        return;
-      }
-
-      // If user has a set password, verify it
-      if (foundUser.password && foundUser.password !== loginPassword) {
-        setIsLoading(false);
-        setErrorMessage('Incorrect password. Please verify your credentials and try again.');
-        return;
-      }
-
-      // Check if account status is active
-      if (foundUser.status === 'Suspended') {
-        setIsLoading(false);
-        setErrorMessage('This account is currently suspended by compliance. Please contact support@tradeshark.co.uk.');
-        return;
-      }
-
-      const now = Date.now();
-      const expiresAt = rememberMe ? now + 24 * 60 * 60 * 1000 : now + 8 * 60 * 60 * 1000;
-      
-      const session: UserSession = {
-        userId: foundUser.id,
-        name: foundUser.name,
-        email: foundUser.email,
-        loginTime: now,
-        expiresAt,
-        sessionType: rememberMe ? '24h' : 'tab'
-      };
-
-      if (rememberMe) {
-        localStorage.setItem('tradeshark_user_session', JSON.stringify(session));
-        sessionStorage.removeItem('tradeshark_user_session');
-      } else {
-        sessionStorage.setItem('tradeshark_user_session', JSON.stringify(session));
-        localStorage.removeItem('tradeshark_user_session');
-      }
-
-      setCurrentUserId(foundUser.id);
+    try {
+      const r = await loginUser(loginIdentifier.trim(), loginPassword, rememberMe);
+      if (isLoginChallenge(r)) { setOtp(r); return; }
+      onLoginSuccess(toSession(r, rememberMe), r);
+    } catch (err) {
+      setErrorMessage(errMsg(err));
+    } finally {
       setIsLoading(false);
-      onLoginSuccess(session, foundUser);
-    }, 400);
+    }
   };
 
-  // Handle Registration
-  const handleRegisterSubmit = (e: React.FormEvent) => {
+  const handleRegisterSubmit = async (e: React.FormEvent) => {
     e.preventDefault();
     setErrorMessage(null);
     setIsLoading(true);
-
-    setTimeout(() => {
-      const trimmedEmail = regEmail.trim().toLowerCase();
-      
-      // Check if already registered
-      if (users.some(u => u.email.toLowerCase() === trimmedEmail)) {
-        setIsLoading(false);
-        setErrorMessage('An account with this email address already exists in the system. Please log in instead.');
-        return;
-      }
-
-      const newUser = createUser({
-        name: regName.trim(),
-        email: trimmedEmail,
-        password: regPassword,
-        phone: regPhone.trim() || '+44 20 7946 0912',
-        country: regCountry,
-        tier: 'Tier 1 - Standard',
-        currency: 'USD',
-        realBalance: 5000,
-        virtualBalance: 100000,
-        kycStatus: 'Pending',
-        kycDocType: 'Passport',
-        kycDocNumber: `REG-${Math.floor(100000 + Math.random() * 900000)}`,
-        kycSubmittedDate: new Date().toISOString().substring(0, 16).replace('T', ' '),
-        amlRisk: 'Low',
-        pepWatchlistHit: false,
-        status: 'Active',
-        role: 'Trader',
-        leverage: 30,
-        allowTrading: true,
-        allowShorting: false,
-        allowCrypto: true,
-        maxPositionLimit: 50000,
-        accountManager: 'David Sterling'
-      });
-
-      const now = Date.now();
-      const session: UserSession = {
-        userId: newUser.id,
-        name: newUser.name,
-        email: newUser.email,
-        loginTime: now,
-        expiresAt: now + 24 * 60 * 60 * 1000,
-        sessionType: '24h'
-      };
-
-      localStorage.setItem('tradeshark_user_session', JSON.stringify(session));
-      setCurrentUserId(newUser.id);
+    try {
+      const user = await registerUser({ name: regName.trim(), email: regEmail.trim(), password: regPassword, phone: regPhone.trim(), country: regCountry });
+      onLoginSuccess(toSession(user, true), user);
+    } catch (err) {
+      setErrorMessage(errMsg(err));
+    } finally {
       setIsLoading(false);
-      onLoginSuccess(session, newUser);
-    }, 450);
+    }
   };
 
   return (
@@ -217,25 +139,32 @@ export const UserLoginGate: React.FC<UserLoginGateProps> = ({
             </div>
             <div className="flex items-center justify-between text-xs">
               <span className="text-white/60">Global Client Capital</span>
-              <span className="text-white font-mono font-bold">$842M+ Segregated</span>
+              <span className="text-white font-mono font-bold">Kept separate</span>
             </div>
             <div className="flex items-center justify-between text-xs">
-              <span className="text-white/60">Regulatory Framework</span>
+              <span className="text-white/60">Account Security</span>
               <span className="text-yellow-400 font-bold flex items-center gap-1">
                 <ShieldCheck className="w-3.5 h-3.5" />
-                <span>FCA / CySEC</span>
+                <span>KYC Verified</span>
               </span>
             </div>
           </div>
 
           <p className="text-[11px] text-white/50 leading-relaxed">
-            Direct institutional connectivity to NASDAQ, LSE, and Tier-1 Crypto liquidity pools.
+            Trade global stocks, ETFs, crypto and currencies from one secure account.
           </p>
         </div>
       </div>
 
       {/* Right Side: Authentication Form */}
       <div className="flex-1 p-6 sm:p-8 md:p-9 flex flex-col justify-center bg-[#14170e]">
+        {otp ? (
+          <OtpStep
+            challenge={otp}
+            onVerified={(user) => onLoginSuccess(toSession(user, rememberMe), user)}
+            onCancel={() => { setOtp(null); setLoginPassword(''); }}
+          />
+        ) : (<>
         {/* Header */}
         <div className="space-y-1 mb-5">
           <TradeSharkLogo size="sm" showLtd={true} className="mb-2" />
@@ -338,8 +267,11 @@ export const UserLoginGate: React.FC<UserLoginGateProps> = ({
                   onChange={(e) => setRememberMe(e.target.checked)}
                   className="rounded bg-[#181c10] border-white/20 text-[#6dff8a] focus:ring-0 cursor-pointer"
                 />
-                <span>Remember session (24h)</span>
+                <span>Keep me signed in</span>
               </label>
+              <button type="button" onClick={() => { onClose(); navigate('/forgot-password'); }} className="text-[#6dff8a] hover:underline">
+                Forgot password?
+              </button>
             </div>
 
             <button
@@ -357,44 +289,6 @@ export const UserLoginGate: React.FC<UserLoginGateProps> = ({
               )}
             </button>
 
-            {/* Quick-Fill Demo Client Accounts */}
-            <div className="mt-3 pt-3 border-t border-white/10 space-y-1.5">
-              <div className="flex items-center justify-between text-[11px] text-white/60">
-                <span className="font-semibold text-white/80">Available Client Accounts:</span>
-                <span className="text-[10px] text-[#6dff8a]">Click to autofill</span>
-              </div>
-
-              <div className="grid grid-cols-2 gap-2">
-                {[
-                  { name: 'Alex Mercer', email: 'alex.m@gmail.com', pass: 'trader123', tier: 'Tier 2 Pro ($104k)' },
-                  { name: 'Sarah Jenkins', email: 'sjenkins@techcorp.io', pass: 'vip123', tier: 'Tier 3 VIP ($423k)' },
-                  { name: 'Liam Chen', email: 'liam.chen@outlook.com', pass: 'trader123', tier: 'Tier 1 Standard ($15k)' },
-                  { name: 'Tariq Al-Mansoor', email: 't.mansoor@gulfcap.ae', pass: 'vip123', tier: 'Tier 3 VIP ($850k)' }
-                ].map((acc, idx) => (
-                  <button
-                    key={idx}
-                    type="button"
-                    onClick={() => {
-                      setLoginIdentifier(acc.email);
-                      setLoginPassword(acc.pass);
-                      setErrorMessage(null);
-                    }}
-                    className={`p-2 rounded-xl text-left border transition-all cursor-pointer ${
-                      loginIdentifier.toLowerCase() === acc.email.toLowerCase()
-                        ? 'bg-[#6dff8a]/15 border-[#6dff8a] text-white'
-                        : 'bg-black/40 border-white/10 hover:border-white/20 text-white/80 hover:text-white'
-                    }`}
-                  >
-                    <div className="flex items-center justify-between text-[11px] font-bold text-white">
-                      <span>{acc.name}</span>
-                      <span className="text-[9px] text-[#6dff8a] font-mono">{acc.pass}</span>
-                    </div>
-                    <div className="text-[10px] text-[#6dff8a] font-mono truncate">{acc.email}</div>
-                    <div className="text-[9px] text-white/40">{acc.tier}</div>
-                  </button>
-                ))}
-              </div>
-            </div>
           </form>
         ) : (
           /* Mode 2: REGISTER FORM */
@@ -432,6 +326,8 @@ export const UserLoginGate: React.FC<UserLoginGateProps> = ({
                   <input
                     type="password"
                     required
+                    minLength={8}
+                    placeholder="Min. 8 characters"
                     value={regPassword}
                     onChange={(e) => setRegPassword(e.target.value)}
                     className="w-full bg-[#181c10] border border-white/15 focus:border-[#6dff8a] rounded-xl pl-8 pr-3 py-2 text-xs text-white outline-none transition-colors"
@@ -450,7 +346,7 @@ export const UserLoginGate: React.FC<UserLoginGateProps> = ({
                     required
                     value={regPhone}
                     onChange={(e) => setRegPhone(e.target.value)}
-                    placeholder="+1 555 0192"
+                    placeholder="Phone number"
                     className="w-full bg-[#181c10] border border-white/15 focus:border-[#6dff8a] rounded-xl pl-8 pr-3 py-2 text-xs text-white outline-none transition-colors"
                   />
                 </div>
@@ -461,18 +357,13 @@ export const UserLoginGate: React.FC<UserLoginGateProps> = ({
                 <div className="relative">
                   <Globe className="w-3.5 h-3.5 text-white/40 absolute left-3 top-1/2 -translate-y-1/2" />
                   <select
+                    required
                     value={regCountry}
                     onChange={(e) => setRegCountry(e.target.value)}
                     className="w-full bg-[#181c10] border border-white/15 focus:border-[#6dff8a] rounded-xl pl-8 pr-3 py-2 text-xs text-white outline-none transition-colors"
                   >
-                    <option value="United Kingdom">United Kingdom</option>
-                    <option value="United States">United States</option>
-                    <option value="Germany">Germany</option>
-                    <option value="Singapore">Singapore</option>
-                    <option value="United Arab Emirates">United Arab Emirates</option>
-                    <option value="Switzerland">Switzerland</option>
-                    <option value="Canada">Canada</option>
-                    <option value="Australia">Australia</option>
+                    <option value="">Select country...</option>
+                    {COUNTRIES.map(c => <option key={c} value={c}>{c}</option>)}
                   </select>
                 </div>
               </div>
@@ -487,7 +378,7 @@ export const UserLoginGate: React.FC<UserLoginGateProps> = ({
                 className="accent-[#6dff8a] w-3.5 h-3.5 mt-0.5"
               />
               <span>
-                I agree to the <strong>TradeShark Terms of Service</strong> and Risk Disclosure.
+                I agree to the <a href="/terms" target="_blank" className="text-[#6dff8a] underline">Terms</a>, <a href="/privacy" target="_blank" className="text-[#6dff8a] underline">Privacy Policy</a> and <a href="/risk-disclosure" target="_blank" className="text-[#6dff8a] underline">Risk Disclosure</a>.
               </span>
             </label>
 
@@ -507,6 +398,7 @@ export const UserLoginGate: React.FC<UserLoginGateProps> = ({
             </button>
           </form>
         )}
+        </>)}
       </div>
     </div>
   );

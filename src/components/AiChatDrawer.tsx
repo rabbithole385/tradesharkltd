@@ -1,6 +1,8 @@
 import React, { useState, useRef, useEffect } from 'react';
 import { X, Send, Bot, Sparkles, User, ArrowRight } from 'lucide-react';
 import { TradeSharkLogo } from './TradeSharkLogo';
+import { useBrokerage } from '../context/BrokerageContext';
+import { api } from '../lib/api';
 
 interface AiChatDrawerProps {
   isOpen: boolean;
@@ -16,19 +18,20 @@ interface ChatMessage {
   time: string;
 }
 
-export const AiChatDrawer: React.FC<AiChatDrawerProps> = ({ 
-  isOpen, 
+export const AiChatDrawer: React.FC<AiChatDrawerProps> = (props) => (props.isOpen ? <AiChatDrawerInner {...props} /> : null);
+
+const AiChatDrawerInner: React.FC<AiChatDrawerProps> = ({ 
   onClose,
   onOpenTrade 
 }) => {
-  if (!isOpen) return null;
+  const { config } = useBrokerage();
 
   const [input, setInput] = useState('');
   const [messages, setMessages] = useState<ChatMessage[]>([
     {
       id: '1',
       sender: 'ai',
-      text: "Hello! I'm Shark AI™, your financial intelligence copilot at TradeShark Ltd. Ask me anything about stock earnings, crypto momentum, top-ranked Pro Investors to copy, or fee structures.",
+      text: `Hello! I'm Shark AI™, your financial intelligence copilot at ${config.appName}. Ask me anything about stock earnings, crypto momentum, top-ranked Pro Investors to copy, or fee structures.`,
       time: 'Just now'
     }
   ]);
@@ -39,7 +42,7 @@ export const AiChatDrawer: React.FC<AiChatDrawerProps> = ({
     messagesEndRef.current?.scrollIntoView({ behavior: 'smooth' });
   }, [messages, isTyping]);
 
-  const handleSend = (textToSend?: string) => {
+  const handleSend = async (textToSend?: string) => {
     const userText = textToSend || input;
     if (!userText.trim()) return;
 
@@ -54,41 +57,37 @@ export const AiChatDrawer: React.FC<AiChatDrawerProps> = ({
     if (!textToSend) setInput('');
     setIsTyping(true);
 
-    // Contextual smart answers
-    setTimeout(() => {
-      let aiReply = "I'm analyzing real-time order book data across TradeShark Ltd exchanges. Our consensus indicator shows elevated volume across tech and semiconductor equities.";
-      let symbol: string | undefined = undefined;
-
-      const lower = userText.toLowerCase();
-      if (lower.includes('nvda') || lower.includes('nvidia')) {
-        aiReply = "NVIDIA (NVDA) is trading at $218.15. 24-hour volume is $42.8B. 89% of TradeShark verified copiers are long, citing next-gen Blackwell datacenter margins. Would you like to open a trade order?";
-        symbol = 'NVDA';
-      } else if (lower.includes('btc') || lower.includes('bitcoin')) {
-        aiReply = "Bitcoin (BTC) is currently holding firmly at $91,420 (+2.84%). Institutional ETF inflows totaled $620M this week. All crypto assets on TradeShark Ltd benefit from zero custody fees and insured cold storage.";
-        symbol = 'BTC';
-      } else if (lower.includes('copy') || lower.includes('investor')) {
-        aiReply = "The top-performing TradeShark Pro Investor this month is Stefan Uleia (+64.73% 24M return, 1,417 copiers). His strategy is heavily centered on macro tech innovation and semiconductor supply chains.";
-      } else if (lower.includes('fee') || lower.includes('cost')) {
-        aiReply = "TradeShark Ltd offers $1 flat commission on US/EU stocks, 0% commission on all leading ETFs, and tiered crypto spreads starting from 0.3%. There are no account maintenance or management fees.";
-      }
-
+    const history = messages.map(m => ({ sender: m.sender, text: m.text }));
+    try {
+      const r = await api.post('/api/ai/chat', { message: userText, history });
       setMessages((prev) => [
         ...prev,
         {
           id: (Date.now() + 1).toString(),
           sender: 'ai',
-          text: aiReply,
-          actionSymbol: symbol,
+          text: r.reply,
+          actionSymbol: r.symbol || undefined,
           time: new Date().toLocaleTimeString([], { hour: '2-digit', minute: '2-digit' })
         }
       ]);
+    } catch (err: any) {
+      setMessages((prev) => [
+        ...prev,
+        {
+          id: (Date.now() + 1).toString(),
+          sender: 'ai',
+          text: err?.message?.includes('Too many') ? err.message : 'Sorry, I could not reach the analysis service just now. Please try again in a moment.',
+          time: new Date().toLocaleTimeString([], { hour: '2-digit', minute: '2-digit' })
+        }
+      ]);
+    } finally {
       setIsTyping(false);
-    }, 900);
+    }
   };
 
   const quickQuestions = [
     'How does CopyTrader™ work?',
-    'What are TradeShark fees for ETFs?',
+    `What are ${config.appName} fees for ETFs?`,
     'Why is NVIDIA (NVDA) moving today?',
     'Who is the top investor to copy?'
   ];
@@ -215,7 +214,7 @@ export const AiChatDrawer: React.FC<AiChatDrawerProps> = ({
             </button>
           </form>
           <span className="block text-[10px] text-white/40 text-center mt-2">
-            TradeShark AI is provided for informational and analytical purposes only.
+            {config.appName} AI is provided for informational and analytical purposes only.
           </span>
         </div>
       </div>

@@ -23,7 +23,7 @@ export const PricingSection: React.FC<PricingSectionProps> = ({ onLearnMore }) =
       metric: 'From 0.3%',
       title: 'Trade more crypto, pay less.',
       description: 'Transparent tiered spreads starting at 0.3% for active traders, capped at 1%.',
-      features: ['150+ cryptocurrencies', 'Cold-storage insured custody', 'Staking yield up to 12% APY']
+      features: ['150+ cryptocurrencies', 'Secure cold-storage custody', 'Staking yield up to 12% APY']
     }
   ];
 
@@ -89,7 +89,7 @@ export const PricingSection: React.FC<PricingSectionProps> = ({ onLearnMore }) =
         {/* Footnote */}
         <div className="mt-12 text-center text-xs text-[#a3a89e] max-w-xl mx-auto">
           For the complete fee schedule in plain numbers, including overnight financing and FX conversion rates, view the{' '}
-          <a href="#fee-schedule" className="text-[#6dff8a] underline underline-offset-2 hover:text-white transition-colors">
+          <a href="/fees" className="text-[#6dff8a] underline underline-offset-2 hover:text-white transition-colors">
             TradeShark Ltd Fee Schedule
           </a>
           .

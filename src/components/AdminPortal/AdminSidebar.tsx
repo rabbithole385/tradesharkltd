@@ -18,7 +18,7 @@ import {
 import { TradeSharkLogo } from '../TradeSharkLogo';
 import { AdminSession } from './AdminLoginGate';
 
-export type AdminTab = 'overview' | 'users' | 'setup' | 'kyc' | 'funding' | 'emails' | 'markets' | 'audit';
+export type AdminTab = 'overview' | 'users' | 'setup' | 'kyc' | 'funding' | 'emails' | 'markets' | 'copytrader' | 'audit' | 'settings';
 
 interface AdminSidebarProps {
   activeTab: AdminTab;
@@ -114,9 +114,21 @@ export const AdminSidebar: React.FC<AdminSidebarProps> = ({
       group: 'TRADING DESK'
     },
     {
+      id: 'copytrader',
+      label: 'CopyTrader & Investors',
+      icon: <Users className="w-4 h-4" />,
+      group: 'TRADING DESK'
+    },
+    {
       id: 'audit',
       label: 'Regulatory Audit Trail',
       icon: <FileText className="w-4 h-4" />,
+      group: 'TRADING DESK'
+    },
+    {
+      id: 'settings',
+      label: 'Payment Settings',
+      icon: <Sliders className="w-4 h-4" />,
       group: 'TRADING DESK'
     }
   ];
@@ -139,7 +151,7 @@ export const AdminSidebar: React.FC<AdminSidebarProps> = ({
         </div>
         <div className="mt-2 text-xs text-white/50 flex items-center gap-1.5">
           <span className="w-1.5 h-1.5 rounded-full bg-[#6dff8a] animate-ping" />
-          <span>FCA Back-Office Control Suite</span>
+          <span>Back-Office Control Suite</span>
         </div>
       </div>
 

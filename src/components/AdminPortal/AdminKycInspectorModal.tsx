@@ -26,7 +26,10 @@ interface AdminKycInspectorModalProps {
   onReject: (userId: string, reason: string) => void;
 }
 
-export const AdminKycInspectorModal: React.FC<AdminKycInspectorModalProps> = ({
+export const AdminKycInspectorModal: React.FC<AdminKycInspectorModalProps> = (props) =>
+  props.isOpen && props.user ? <AdminKycInspectorInner {...props} user={props.user} /> : null;
+
+const AdminKycInspectorInner: React.FC<AdminKycInspectorModalProps & { user: UserAccount }> = ({
   user,
   isOpen,
   onClose,
@@ -34,8 +37,6 @@ export const AdminKycInspectorModal: React.FC<AdminKycInspectorModalProps> = ({
   onRequestResubmit,
   onReject
 }) => {
-  if (!isOpen || !user) return null;
-
   const [resubmitNote, setResubmitNote] = useState('Proof of address is slightly unreadable or older than 90 days. Please provide an updated official bank statement.');
   const [rejectReason, setRejectReason] = useState('Identity document mismatch with registered legal name.');
   const [activeAction, setActiveAction] = useState<'view' | 'resubmit' | 'reject'>('view');
@@ -113,101 +114,19 @@ export const AdminKycInspectorModal: React.FC<AdminKycInspectorModalProps> = ({
               Submitted Regulatory Identity Artifacts
             </h4>
 
-            <div className="grid grid-cols-1 md:grid-cols-3 gap-4">
-              {/* Document Front Preview */}
-              <div className="p-4 rounded-2xl bg-white/[0.02] border border-white/10 space-y-3 flex flex-col">
-                <div className="flex items-center justify-between text-xs">
-                  <span className="font-bold text-white flex items-center gap-1.5">
-                    <FileText className="w-3.5 h-3.5 text-[#6dff8a]" />
-                    <span>ID Document (Front)</span>
-                  </span>
-                  <span className="text-[10px] text-[#6dff8a] font-mono">MRZ Verified</span>
-                </div>
-
-                <div className="aspect-[4/3] rounded-xl bg-gradient-to-br from-[#1c2415] to-[#12160d] border border-white/10 p-3 flex flex-col justify-between relative overflow-hidden group">
-                  <div className="flex items-center justify-between">
-                    <div className="w-7 h-7 rounded bg-white/10 flex items-center justify-center font-bold text-[10px] text-white">
-                      PAS
-                    </div>
-                    <span className="text-[9px] font-mono text-white/40">OFFICIAL SPECIMEN</span>
-                  </div>
-
-                  <div className="space-y-1 my-auto">
-                    <div className="text-xs font-bold text-white">{user.name}</div>
-                    <div className="text-[10px] font-mono text-white/70">NO: {user.kycDocNumber || 'GB-8392104'}</div>
-                    <div className="text-[9px] text-white/40">DOB: {user.dateOfBirth || '14/05/1988'} • {user.country}</div>
-                  </div>
-
-                  <div className="pt-2 border-t border-white/10 text-[8px] font-mono text-[#6dff8a]/70 tracking-widest truncate">
-                    P&lt;GBR{user.name.replace(/\s+/g, '&lt;').toUpperCase()}&lt;&lt;&lt;&lt;&lt;&lt;&lt;&lt;&lt;&lt;&lt;&lt;&lt;&lt;
-                  </div>
-                </div>
-
-                <div className="text-[11px] text-white/50 truncate">
-                  File: {user.kycDocFrontName || `${user.kycDocType?.toLowerCase() || 'id'}_front_scanned.pdf`}
-                </div>
-              </div>
-
-              {/* Proof of Address Preview */}
-              <div className="p-4 rounded-2xl bg-white/[0.02] border border-white/10 space-y-3 flex flex-col">
-                <div className="flex items-center justify-between text-xs">
-                  <span className="font-bold text-white flex items-center gap-1.5">
-                    <MapPin className="w-3.5 h-3.5 text-[#6dff8a]" />
-                    <span>Proof of Address</span>
-                  </span>
-                  <span className="text-[10px] text-[#6dff8a] font-mono">&lt; 90 Days</span>
-                </div>
-
-                <div className="aspect-[4/3] rounded-xl bg-gradient-to-br from-[#1a2218] to-[#0f140c] border border-white/10 p-3 flex flex-col justify-between text-[10px]">
-                  <div className="flex items-center justify-between border-b border-white/10 pb-1.5">
-                    <span className="font-bold text-white">Barclays Bank Statement</span>
-                    <span className="text-white/40 font-mono text-[9px]">ISSUED AUG 2026</span>
-                  </div>
-
-                  <div className="space-y-1 text-white/70">
-                    <div className="font-semibold text-white">{user.name}</div>
-                    <div>{user.streetAddress || '42 Kensington Church Street'}</div>
-                    <div>{user.city || 'London'}, {user.postalCode || 'W8 4DB'}</div>
-                  </div>
-
-                  <div className="pt-1.5 border-t border-white/10 flex items-center justify-between text-[9px] text-[#6dff8a]">
-                    <span>Address Match 100%</span>
-                    <span>Watermark Verified</span>
-                  </div>
-                </div>
-
-                <div className="text-[11px] text-white/50 truncate">
-                  File: {user.kycProofAddressName || 'bank_statement_aug2026.pdf'}
-                </div>
-              </div>
-
-              {/* Biometric Liveness Selfie Preview */}
-              <div className="p-4 rounded-2xl bg-white/[0.02] border border-white/10 space-y-3 flex flex-col">
-                <div className="flex items-center justify-between text-xs">
-                  <span className="font-bold text-white flex items-center gap-1.5">
-                    <Camera className="w-3.5 h-3.5 text-[#6dff8a]" />
-                    <span>Biometric Face Scan</span>
-                  </span>
-                  <span className="text-[10px] text-[#6dff8a] font-mono">Live Liveness</span>
-                </div>
-
-                <div className="aspect-[4/3] rounded-xl bg-black/60 border border-[#6dff8a]/30 p-3 flex flex-col items-center justify-center relative overflow-hidden">
-                  {/* Visual Face Oval overlay */}
-                  <div className="w-20 h-24 rounded-[50%] border-2 border-[#6dff8a] flex items-center justify-center relative animate-pulse">
-                    <div className="w-12 h-14 rounded-[50%] bg-[#6dff8a]/20 flex items-center justify-center text-white font-bold text-xs">
-                      {user.name.slice(0, 2).toUpperCase()}
-                    </div>
-                  </div>
-                  <div className="mt-2 text-[10px] font-mono text-[#6dff8a]">
-                    Match: {user.facialMatchScore || 98.8}% • Anti-Spoof PASS
-                  </div>
-                </div>
-
-                <div className="text-[11px] text-white/50 truncate">
-                  Status: Biometric video verification certified
-                </div>
-              </div>
+            <div className="grid grid-cols-1 sm:grid-cols-2 md:grid-cols-4 gap-4">
+              {([
+                ['front', 'ID Document (Front)', user.kycDocFrontName],
+                ['back', 'ID Document (Back)', user.kycDocBackName],
+                ['proof', 'Proof of Address', user.kycProofAddressName],
+                ['selfie', 'Selfie / Liveness', 'Selfie capture'],
+              ] as const).map(([kind, label, name]) => (
+                <KycDocCard key={kind} label={label} fileId={user.kycFileIds?.[kind]} filename={name} />
+              ))}
             </div>
+            <p className="mt-3 text-[11px] text-white/40">
+              Declared: {user.kycDocType} #{user.kycDocNumber || '-'} • DOB {user.dateOfBirth || '-'} • {[user.streetAddress, user.city, user.postalCode, user.country].filter(Boolean).join(', ') || 'No address on file'}
+            </p>
           </div>
 
           {/* Action Modals / Panes */}
@@ -321,6 +240,32 @@ export const AdminKycInspectorModal: React.FC<AdminKycInspectorModalProps> = ({
             )}
           </div>
         </div>
+      </div>
+    </div>
+  );
+};
+
+
+const KycDocCard: React.FC<{ label: string; fileId?: string; filename?: string }> = ({ label, fileId, filename }) => {
+  const url = fileId ? `/api/admin/files/${fileId}` : '';
+  const isPdf = (filename || '').toLowerCase().endsWith('.pdf');
+  return (
+    <div className="p-3 rounded-2xl bg-white/[0.02] border border-white/10 space-y-2 flex flex-col">
+      <div className="text-xs font-bold text-white">{label}</div>
+      {fileId ? (
+        <a href={url} target="_blank" rel="noopener noreferrer" className="block aspect-[4/3] rounded-xl bg-black/50 border border-white/10 overflow-hidden group">
+          {isPdf ? (
+            <div className="w-full h-full flex flex-col items-center justify-center text-white/60 text-xs gap-1"><FileText className="w-8 h-8 text-[#6dff8a]" />PDF document</div>
+          ) : (
+            <img src={url} alt={label} className="w-full h-full object-cover group-hover:scale-105 transition-transform" />
+          )}
+        </a>
+      ) : (
+        <div className="aspect-[4/3] rounded-xl bg-black/30 border border-dashed border-white/15 flex items-center justify-center text-[11px] text-white/40">Not uploaded</div>
+      )}
+      <div className="text-[10px] text-white/50 truncate flex items-center justify-between gap-2">
+        <span className="truncate">{fileId ? filename || 'uploaded file' : '-'}</span>
+        {fileId && <a href={url} target="_blank" rel="noopener noreferrer" className="text-[#6dff8a] flex items-center gap-1 shrink-0"><ExternalLink className="w-3 h-3" />Open</a>}
       </div>
     </div>
   );
